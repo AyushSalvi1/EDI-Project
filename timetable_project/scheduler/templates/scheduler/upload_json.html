@@ -1,0 +1,94 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Upload College Data JSON | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-8">
+
+  <!-- Header -->
+  <div>
+    <h1 class="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
+      <i class="fa-solid fa-cloud-arrow-up text-indigo-600"></i> Upload College Schedule Data
+    </h1>
+    <p class="mt-1 text-sm text-slate-500">
+      Import a single JSON file containing semester parameters, working hours, division strengths, rooms, subjects, and faculty allocations.
+    </p>
+  </div>
+
+  <!-- Upload Card -->
+  <div class="card p-6 sm:p-8">
+    <form method="POST" enctype="multipart/form-data" class="space-y-6">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-sm font-semibold text-slate-800 mb-2">
+          Select JSON File
+        </label>
+        <div class="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-indigo-400 transition bg-slate-50/50">
+          <i class="fa-solid fa-file-code text-indigo-500 text-4xl mb-3"></i>
+          <p class="text-sm font-medium text-slate-700">Choose a valid college data JSON file</p>
+          <p class="text-xs text-slate-400 mt-1">Must strictly follow the required schema</p>
+          <input type="file" name="json_file" accept=".json" required class="mt-4 block mx-auto text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-4 border-t border-slate-100">
+        <a href="{% url 'scheduler:home' %}" class="btn-ghost">
+          <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
+        </a>
+        <button type="submit" class="btn-primary">
+          <i class="fa-solid fa-upload"></i> Validate & Import Data
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Schema Specification & Sample Snippet -->
+  <div class="card p-6 space-y-4">
+    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+      <i class="fa-solid fa-code text-indigo-600"></i> Expected JSON Schema Format
+    </h2>
+    <p class="text-xs text-slate-600">
+      The file must specify semester details, daily working hours with excluded lunch window, years/divisions, rooms totals, and faculty allocations:
+    </p>
+
+    <pre class="bg-slate-900 text-indigo-200 p-4 rounded-xl text-xs overflow-x-auto font-mono leading-relaxed"><code>{
+  "college": {
+    "name": "Engineering College",
+    "semester_name": "Fall Semester 2026",
+    "start_date": "2026-08-01",
+    "end_date": "2026-12-15",
+    "working_days": ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
+    "daily_start_time": "09:00",
+    "daily_end_time": "18:00",
+    "period_duration_minutes": 60,
+    "lunch_break": { "start_time": "13:00", "end_time": "14:00" }
+  },
+  "years": [
+    { "year": 1, "number_of_divisions": 3, "strength_per_division": 60 }
+  ],
+  "subjects": [
+    { "id": "SUB1", "name": "Physics", "is_lab": false }
+  ],
+  "rooms": {
+    "number_of_regular_rooms": 20,
+    "regular_room_capacity": 60,
+    "number_of_lab_rooms": 5,
+    "lab_room_capacity": 40
+  },
+  "teachers": [
+    {
+      "id": "T1",
+      "name": "Mr. Sharma",
+      "max_hours_per_week": 24,
+      "unavailable_slots": ["FRI-P4"],
+      "allocations": [
+        { "year": 1, "division": 1, "subject_id": "SUB1", "total_hours_for_semester": 64 }
+      ]
+    }
+  ]
+}</code></pre>
+  </div>
+
+</div>
+{% endblock %}

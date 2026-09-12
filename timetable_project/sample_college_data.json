@@ -1,0 +1,135 @@
+{
+  "college": {
+    "name": "Apex Engineering Institute",
+    "semester_name": "Fall Semester 2026",
+    "start_date": "2026-08-03",
+    "end_date": "2026-11-16",
+    "working_days": ["MON", "TUE", "WED", "THU", "FRI", "SAT"],
+    "daily_start_time": "09:00",
+    "daily_end_time": "17:00",
+    "period_duration_minutes": 60,
+    "lunch_break": {
+      "start_time": "13:00",
+      "end_time": "14:00"
+    }
+  },
+  "years": [
+    {
+      "year": 1,
+      "number_of_divisions": 2,
+      "strength_per_division": 60
+    },
+    {
+      "year": 2,
+      "number_of_divisions": 2,
+      "strength_per_division": 60
+    },
+    {
+      "year": 3,
+      "number_of_divisions": 2,
+      "strength_per_division": 55
+    },
+    {
+      "year": 4,
+      "number_of_divisions": 1,
+      "strength_per_division": 50
+    }
+  ],
+  "subjects": [
+    { "id": "SUB101", "name": "Engineering Physics", "is_lab": false },
+    { "id": "SUB101L", "name": "Physics Laboratory", "is_lab": true },
+    { "id": "SUB102", "name": "Calculus & Linear Algebra", "is_lab": false },
+    { "id": "SUB201", "name": "Data Structures & Algorithms", "is_lab": false },
+    { "id": "SUB201L", "name": "DSA Practice Lab", "is_lab": true },
+    { "id": "SUB202", "name": "Digital Logic & Computer Architecture", "is_lab": false },
+    { "id": "SUB301", "name": "Database Management Systems", "is_lab": false },
+    { "id": "SUB301L", "name": "DBMS Systems Lab", "is_lab": true },
+    { "id": "SUB302", "name": "Operating Systems & Networking", "is_lab": false },
+    { "id": "SUB401", "name": "Artificial Intelligence & Machine Learning", "is_lab": false },
+    { "id": "SUB401L", "name": "AI Capstone Project Lab", "is_lab": true }
+  ],
+  "rooms": {
+    "number_of_regular_rooms": 12,
+    "regular_room_capacity": 70,
+    "number_of_lab_rooms": 5,
+    "lab_room_capacity": 60
+  },
+  "teachers": [
+    {
+      "id": "T1",
+      "name": "Dr. Rohit Sharma",
+      "max_hours_per_week": 20,
+      "unavailable_slots": ["MON-P1", "FRI-P5"],
+      "allocations": [
+        { "year": 1, "division": 1, "subject_id": "SUB101", "total_hours_for_semester": 60 },
+        { "year": 1, "division": 2, "subject_id": "SUB101", "total_hours_for_semester": 60 }
+      ]
+    },
+    {
+      "id": "T2",
+      "name": "Prof. Anita Desai",
+      "max_hours_per_week": 18,
+      "unavailable_slots": ["SAT-P6"],
+      "allocations": [
+        { "year": 1, "division": 1, "subject_id": "SUB101L", "total_hours_for_semester": 30 },
+        { "year": 1, "division": 2, "subject_id": "SUB101L", "total_hours_for_semester": 30 }
+      ]
+    },
+    {
+      "id": "T3",
+      "name": "Dr. Vikram Patel",
+      "max_hours_per_week": 22,
+      "unavailable_slots": ["WED-P3"],
+      "allocations": [
+        { "year": 1, "division": 1, "subject_id": "SUB102", "total_hours_for_semester": 60 },
+        { "year": 1, "division": 2, "subject_id": "SUB102", "total_hours_for_semester": 60 },
+        { "year": 2, "division": 1, "subject_id": "SUB202", "total_hours_for_semester": 45 }
+      ]
+    },
+    {
+      "id": "T4",
+      "name": "Prof. Neha Kulkarni",
+      "max_hours_per_week": 24,
+      "unavailable_slots": ["TUE-P2"],
+      "allocations": [
+        { "year": 2, "division": 1, "subject_id": "SUB201", "total_hours_for_semester": 60 },
+        { "year": 2, "division": 2, "subject_id": "SUB201", "total_hours_for_semester": 60 },
+        { "year": 2, "division": 1, "subject_id": "SUB201L", "total_hours_for_semester": 30 },
+        { "year": 2, "division": 2, "subject_id": "SUB201L", "total_hours_for_semester": 30 }
+      ]
+    },
+    {
+      "id": "T5",
+      "name": "Dr. Arvind Subramanian",
+      "max_hours_per_week": 20,
+      "unavailable_slots": ["THU-P4"],
+      "allocations": [
+        { "year": 2, "division": 2, "subject_id": "SUB202", "total_hours_for_semester": 45 },
+        { "year": 3, "division": 1, "subject_id": "SUB302", "total_hours_for_semester": 60 },
+        { "year": 3, "division": 2, "subject_id": "SUB302", "total_hours_for_semester": 60 }
+      ]
+    },
+    {
+      "id": "T6",
+      "name": "Prof. Sunita Rao",
+      "max_hours_per_week": 20,
+      "unavailable_slots": ["FRI-P1", "FRI-P2"],
+      "allocations": [
+        { "year": 3, "division": 1, "subject_id": "SUB301", "total_hours_for_semester": 60 },
+        { "year": 3, "division": 2, "subject_id": "SUB301", "total_hours_for_semester": 60 },
+        { "year": 3, "division": 1, "subject_id": "SUB301L", "total_hours_for_semester": 30 },
+        { "year": 3, "division": 2, "subject_id": "SUB301L", "total_hours_for_semester": 30 }
+      ]
+    },
+    {
+      "id": "T7",
+      "name": "Dr. Rajesh Iyer",
+      "max_hours_per_week": 16,
+      "unavailable_slots": ["SAT-P1"],
+      "allocations": [
+        { "year": 4, "division": 1, "subject_id": "SUB401", "total_hours_for_semester": 60 },
+        { "year": 4, "division": 1, "subject_id": "SUB401L", "total_hours_for_semester": 30 }
+      ]
+    }
+  ]
+}

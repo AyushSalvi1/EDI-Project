@@ -1,0 +1,165 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Division Timetable Grid | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header & Controls -->
+  <div class="card p-4 sm:p-6 no-print">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-table-cells text-indigo-600"></i> Division Timetable
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">
+          Select a division to inspect its conflict-free weekly schedule across periods and working days.
+        </p>
+      </div>
+
+      <!-- Filter Controls -->
+      <form method="GET" class="flex flex-wrap items-center gap-3">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Semester</label>
+          <select name="semester_id" onchange="this.form.submit()" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            {% for s in semesters %}
+            <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>
+              {{ s.name }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Year & Division</label>
+          <select name="division_id" onchange="this.form.submit()" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none">
+            {% for d in divisions %}
+            <option value="{{ d.id }}" {% if selected_division and selected_division.id == d.id %}selected{% endif %}>
+              {{ d.name }} (Cap: {{ d.strength }})
+            </option>
+            {% empty %}
+            <option disabled selected>No divisions available</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="pt-5">
+          <button type="button" onclick="window.print()" class="btn-ghost !text-xs !py-1.5">
+            <i class="fa-solid fa-print"></i> Print / PDF
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Division Title Banner -->
+  {% if selected_division %}
+  <div class="flex items-center justify-between bg-indigo-900 text-white p-4 rounded-xl shadow-sm">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-indigo-700/60 flex items-center justify-center font-bold text-lg">
+        Y{{ selected_division.year }}
+      </div>
+      <div>
+        <h2 class="text-lg font-bold">{{ selected_division.name }}</h2>
+        <p class="text-xs text-indigo-200">
+          Student Strength: {{ selected_division.strength }} &bull; Semester: {{ selected_semester.name }}
+        </p>
+      </div>
+    </div>
+    <div class="no-print">
+      <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ selected_semester.id }}" class="text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg font-medium transition">
+        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Re-solve
+      </a>
+    </div>
+  </div>
+
+  <!-- Weekly Timetable Grid Table (Day x Period) -->
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[700px]">
+        <thead>
+          <tr class="bg-slate-900 text-white text-xs font-semibold uppercase tracking-wider">
+            <th class="p-3.5 border-r border-slate-800 text-center w-28 bg-slate-950">
+              Period / Time
+            </th>
+            {% for header in day_headers %}
+            <th class="p-3.5 border-r border-slate-800 last:border-0 text-center">
+              {{ header }}
+            </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200 text-xs">
+          {% for row in grid_rows %}
+          <tr class="hover:bg-slate-50/50 transition">
+            <!-- Period Header Column -->
+            <td class="p-3 border-r border-slate-200 bg-slate-50 font-semibold text-center whitespace-nowrap">
+              <div class="text-slate-900 font-bold">Period {{ row.period_number }}</div>
+              <div class="text-[11px] text-slate-500 font-mono mt-0.5">{{ row.time_range }}</div>
+            </td>
+
+            <!-- Day Cells -->
+            {% for cell in row.cells %}
+            <td class="p-2.5 border-r border-slate-200 last:border-0 align-top h-24 w-1/6">
+              {% if cell.entry %}
+              <div class="h-full rounded-xl p-2.5 flex flex-col justify-between border shadow-sm transition
+                {% if cell.entry.assignment.subject.is_lab %}
+                  bg-purple-50/90 border-purple-200 text-purple-950
+                {% else %}
+                  bg-indigo-50/90 border-indigo-200 text-indigo-950
+                {% endif %}">
+
+                <!-- Subject & Badge -->
+                <div>
+                  <div class="flex items-center justify-between gap-1 mb-1">
+                    <span class="font-bold text-xs leading-snug line-clamp-1">
+                      {{ cell.entry.assignment.subject.name }}
+                    </span>
+                    {% if cell.entry.assignment.subject.is_lab %}
+                    <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-200/80 text-purple-800 shrink-0">LAB</span>
+                    {% endif %}
+                  </div>
+
+                  <!-- Teacher Name -->
+                  <div class="text-[11px] text-slate-700 flex items-center gap-1">
+                    <i class="fa-solid fa-user-tie text-[10px] text-slate-400"></i>
+                    <span class="truncate font-medium">{{ cell.entry.assignment.teacher.name }}</span>
+                  </div>
+                </div>
+
+                <!-- Room Name -->
+                <div class="mt-2 pt-1 border-t {% if cell.entry.assignment.subject.is_lab %}border-purple-200/60 text-purple-800{% else %}border-indigo-200/60 text-indigo-800{% endif %} text-[10px] font-mono flex items-center justify-between">
+                  <span><i class="fa-solid fa-door-open mr-1"></i>{{ cell.entry.room.name }}</span>
+                  <span class="text-[9px] text-slate-500">Cap: {{ cell.entry.room.capacity }}</span>
+                </div>
+
+              </div>
+              {% else %}
+              <div class="h-full rounded-xl border border-dashed border-slate-200 bg-slate-50/40 flex items-center justify-center text-slate-400 text-[11px]">
+                <span class="italic opacity-60">Free</span>
+              </div>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="p-8 text-center text-sm text-slate-500">
+              No time slots or timetable entries configured.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div class="card p-12 text-center">
+    <i class="fa-solid fa-calendar-xmark text-slate-300 text-4xl mb-3"></i>
+    <p class="text-sm font-semibold text-slate-700">No Division Selected</p>
+    <p class="text-xs text-slate-400 mt-1">Please import college data to generate division timetables.</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

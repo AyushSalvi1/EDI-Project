@@ -1,0 +1,154 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Generate Timetable | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-8 max-w-5xl mx-auto">
+
+  <!-- Header -->
+  <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
+        <i class="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> Timetable Generator & Conflict Engine
+      </h1>
+      <p class="mt-1 text-sm text-slate-500">
+        Run Google OR-Tools CP-SAT to calculate an optimal, conflict-free timetable across all divisions and rooms.
+      </p>
+    </div>
+
+    {% if selected_semester %}
+    <a href="{% url 'scheduler:timetable_view' %}?semester_id={{ selected_semester.id }}" class="btn-ghost">
+      <i class="fa-solid fa-table-cells"></i> View Grid
+    </a>
+    {% endif %}
+  </div>
+
+  <!-- Control & Status Card -->
+  <div class="card p-6 sm:p-8">
+    <form method="POST" class="space-y-6">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-2">
+            Target Semester
+          </label>
+          <select name="semester_id" onchange="window.location.href='?semester_id='+this.value" class="w-full rounded-xl border border-slate-300 p-2.5 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            {% for s in semesters %}
+            <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>
+              {{ s.name }} ({{ s.start_date }} → {{ s.end_date }})
+            </option>
+            {% empty %}
+            <option disabled selected>No semesters found</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="flex gap-2">
+          {% if selected_semester %}
+          <button type="submit" class="btn-primary w-full justify-center !py-2.5">
+            <i class="fa-solid fa-play"></i> Run CP-SAT Solver
+          </button>
+          {% else %}
+          <a href="{% url 'scheduler:upload_json' %}" class="btn-primary w-full justify-center !py-2.5">
+            <i class="fa-solid fa-cloud-arrow-up"></i> Upload Data First
+          </a>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+
+    {% if selected_semester %}
+    <div class="mt-6 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-500">
+      <div class="flex items-center gap-4">
+        <span>Current Status: <strong class="text-slate-800">{{ entries_count }}</strong> slots scheduled</span>
+        <span>Issues: <strong class="{% if issues %}text-amber-600{% else %}text-emerald-600{% endif %}">{{ issues|length }}</strong></span>
+      </div>
+      <div>
+        <a href="/admin/scheduler/assignment/?semester__id__exact={{ selected_semester.id }}" target="_blank" class="text-indigo-600 hover:underline inline-flex items-center gap-1 font-semibold">
+          <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i> Edit Faculty Allocations in Admin
+        </a>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Scheduling Issues Table (When over-committed or partially scheduled) -->
+  {% if issues %}
+  <div class="card overflow-hidden border-amber-200 shadow-amber-50">
+    <div class="p-4 sm:p-6 bg-amber-50/70 border-b border-amber-100 flex items-center justify-between">
+      <div>
+        <h2 class="text-base font-bold text-amber-900 flex items-center gap-2">
+          <i class="fa-solid fa-triangle-exclamation text-amber-600"></i> Scheduling Bottlenecks & Unfulfilled Hours ({{ issues|length }})
+        </h2>
+        <p class="text-xs text-amber-800 mt-1">
+          The solver maximized scheduled hours while strictly guaranteeing zero conflicts. The following allocations could not be fully placed due to resource constraints.
+        </p>
+      </div>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead class="bg-amber-100/60 text-amber-900 font-semibold border-b border-amber-200 uppercase tracking-wider">
+          <tr>
+            <th class="p-3">Division</th>
+            <th class="p-3">Subject</th>
+            <th class="p-3">Teacher</th>
+            <th class="p-3 text-center">Req / Sched</th>
+            <th class="p-3">Reason / Bottleneck</th>
+            <th class="p-3">Actionable Suggestion</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-amber-100 text-slate-700 bg-white">
+          {% for issue in issues %}
+          <tr class="hover:bg-amber-50/40 transition">
+            <td class="p-3 font-semibold text-slate-800 whitespace-nowrap">
+              {{ issue.assignment.division.name }}
+            </td>
+            <td class="p-3 whitespace-nowrap">
+              {{ issue.assignment.subject.name }}
+              {% if issue.assignment.subject.is_lab %}
+              <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-100 text-purple-700">Lab</span>
+              {% endif %}
+            </td>
+            <td class="p-3 whitespace-nowrap font-medium text-slate-800">
+              {{ issue.assignment.teacher.name }}
+            </td>
+            <td class="p-3 text-center whitespace-nowrap">
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800">
+                {{ issue.hours_scheduled }} / {{ issue.hours_requested }} hrs
+              </span>
+            </td>
+            <td class="p-3 text-slate-600 max-w-xs">
+              {{ issue.reason }}
+            </td>
+            <td class="p-3 text-indigo-700 font-medium max-w-xs">
+              {{ issue.suggestion }}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% elif selected_semester and entries_count > 0 %}
+  <div class="card p-6 bg-emerald-50 border-emerald-200 text-emerald-900 flex items-center gap-4">
+    <div class="w-10 h-10 rounded-full bg-emerald-200 flex items-center justify-center shrink-0">
+      <i class="fa-solid fa-circle-check text-emerald-700 text-xl"></i>
+    </div>
+    <div>
+      <h3 class="text-sm font-bold text-emerald-900">100% Conflict-Free Timetable Generated!</h3>
+      <p class="text-xs text-emerald-700 mt-0.5">
+        All requested hours across all faculty allocations have been successfully placed with zero clashes.
+      </p>
+    </div>
+    <div class="ml-auto">
+      <a href="{% url 'scheduler:timetable_view' %}?semester_id={{ selected_semester.id }}" class="btn-secondary !text-xs !py-2">
+        <i class="fa-solid fa-table-cells"></i> View Grid
+      </a>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
