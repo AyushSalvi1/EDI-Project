@@ -3,3 +3,4 @@ django>=5.0.0
 
 # Constraint Satisfaction & Optimization Solver
 ortools>=9.8.0
+psutil>=5.9.0

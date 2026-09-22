@@ -1,8 +1,9 @@
+import json
+
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db.models import Prefetch
 
 from .models import (
     Semester,
@@ -11,7 +12,6 @@ from .models import (
     Room,
     TimeSlot,
     Teacher,
-    Assignment,
     TimetableEntry,
     SchedulingIssue,
     DAY_CHOICES,
@@ -19,7 +19,10 @@ from .models import (
 from .importer import import_college_data_from_json
 from .solver import generate_timetable, TimetableSolverError
 
+MAX_UPLOAD_SIZE = 5 * 1024 * 1024
 
+
+@login_required
 def home_view(request):
     """Dashboard view showing overview stats and quick navigation."""
     semesters = Semester.objects.all().order_by("-start_date")
@@ -38,6 +41,7 @@ def home_view(request):
     return render(request, "scheduler/dashboard.html", context)
 
 
+@login_required
 def upload_json_view(request):
     """Page to upload college data JSON file with validation error reporting."""
     if request.method == "POST":
@@ -46,8 +50,16 @@ def upload_json_view(request):
             messages.error(request, "Please select a JSON file to upload.")
             return render(request, "scheduler/upload_json.html")
 
-        if not uploaded_file.name.endswith(".json"):
+        if not uploaded_file.name.lower().endswith(".json"):
             messages.error(request, "Invalid file extension. Please upload a .json file.")
+            return render(request, "scheduler/upload_json.html")
+
+        if uploaded_file.size > MAX_UPLOAD_SIZE:
+            messages.error(request, "The JSON file is too large. Maximum allowed size is 5 MB.")
+            return render(request, "scheduler/upload_json.html")
+
+        if uploaded_file.content_type not in {"application/json", "application/*+json"}:
+            messages.error(request, "Invalid file type. Please upload a JSON file with content type application/json.")
             return render(request, "scheduler/upload_json.html")
 
         try:
@@ -64,12 +76,15 @@ def upload_json_view(request):
         except ValidationError as ve:
             error_details = ve.message if hasattr(ve, "message") else str(ve)
             messages.error(request, f"JSON Validation Error:\n{error_details}")
-        except Exception as e:
-            messages.error(request, f"Import Error: {str(e)}")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            messages.error(request, "Import failed because the file is not valid UTF-8 JSON.")
+        except Exception:
+            messages.error(request, "Import failed due to an unexpected server error. Please check the file and try again.")
 
     return render(request, "scheduler/upload_json.html")
 
 
+@login_required
 def generate_timetable_view(request):
     """Page to trigger timetable generation and display results/issues."""
     semesters = Semester.objects.all().order_by("-start_date")
@@ -109,6 +124,7 @@ def generate_timetable_view(request):
     return render(request, "scheduler/generate.html", context)
 
 
+@login_required
 def timetable_view(request):
     """Search and view timetable for any single division in a Day x Period grid."""
     semesters = Semester.objects.all().order_by("-start_date")

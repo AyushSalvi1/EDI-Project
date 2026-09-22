@@ -11,6 +11,7 @@ from .models import (
     Assignment,
     TimetableEntry,
     SchedulingIssue,
+    SolverRun,
 )
 from .solver import generate_timetable, TimetableSolverError
 
@@ -157,3 +158,17 @@ class SchedulingIssueAdmin(admin.ModelAdmin):
     list_display = ("semester", "assignment", "hours_requested", "hours_scheduled", "reason", "suggestion")
     list_filter = ("semester",)
     search_fields = ("assignment__teacher__name", "assignment__subject__name", "reason", "suggestion")
+
+
+@admin.register(SolverRun)
+class SolverRunAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at", "semester", "solver_status", "wall_time_seconds",
+        "variable_count", "constraint_count", "ram_used_after_mb",
+    )
+    list_filter = ("semester", "solver_status")
+    readonly_fields = (
+        "created_at", "semester", "cpu_percent_before", "cpu_percent_after",
+        "ram_used_before_mb", "ram_used_after_mb", "wall_time_seconds",
+        "variable_count", "constraint_count", "solver_status",
+    )

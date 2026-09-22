@@ -1,5 +1,5 @@
 import math
-from datetime import datetime, time, timedelta
+from datetime import time
 from django.db import models
 
 
@@ -346,3 +346,22 @@ class SchedulingIssue(models.Model):
 
     def __str__(self):
         return (f"Issue for {self.assignment}: {self.hours_scheduled}/{self.hours_requested} hrs scheduled")
+
+
+class SolverRun(models.Model):
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name='solver_runs')
+    created_at = models.DateTimeField(auto_now_add=True)
+    cpu_percent_before = models.FloatField()
+    cpu_percent_after = models.FloatField()
+    ram_used_before_mb = models.FloatField()
+    ram_used_after_mb = models.FloatField()
+    wall_time_seconds = models.FloatField()
+    variable_count = models.PositiveIntegerField()
+    constraint_count = models.PositiveIntegerField()
+    solver_status = models.CharField(max_length=32)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.semester.name} solver run at {self.created_at} ({self.solver_status})"

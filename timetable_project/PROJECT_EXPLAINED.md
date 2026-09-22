@@ -206,7 +206,7 @@ python manage.py runserver
 
 ### Step 6: Access the Web App
 - Open browser: **http://127.0.0.1:8000/**
-- Admin panel: **http://127.0.0.1:8000/admin/** (Username: `admin`, Password: `admin123`)
+- Admin panel: **http://127.0.0.1:8000/admin/**. Create an administrator with `python manage.py createsuperuser`.
 
 ---
 

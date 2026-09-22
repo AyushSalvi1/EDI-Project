@@ -1,18 +1,14 @@
 from collections import Counter
 from django.test import TestCase
-from django.core.exceptions import ValidationError
 
 from scheduler.models import (
-    Semester,
     YearDivision,
-    Subject,
-    Room,
-    TimeSlot,
     Teacher,
     TeacherUnavailability,
     Assignment,
     TimetableEntry,
     SchedulingIssue,
+    SolverRun,
     generate_time_slots,
 )
 from scheduler.importer import import_college_data_from_dict
@@ -263,7 +259,6 @@ class TimetableGeneratorTestCase(TestCase):
 class TimetableWebViewsTestCase(TestCase):
 
     def setUp(self):
-        import json
         from django.contrib.auth import get_user_model
         User = get_user_model()
         self.admin_user = User.objects.create_superuser("admin_test", "admin@test.com", "password123")
@@ -313,13 +308,19 @@ class TimetableWebViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Automatic Timetable Generator")
 
+    def test_application_views_require_authentication(self):
+        self.client.logout()
+        for path in ["/", "/upload/", "/generate/", "/timetable/"]:
+            response = self.client.get(path)
+            self.assertRedirects(response, f"/admin/login/?next={path}")
+
     def test_upload_json_view_get(self):
         response = self.client.get("/upload/")
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Upload College Schedule Data")
 
     def test_upload_json_view_post_valid(self):
-        import io, json
+        import json
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         json_bytes = json.dumps(self.sample_data).encode("utf-8")
@@ -329,10 +330,26 @@ class TimetableWebViewsTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Successfully imported data")
 
+    def test_upload_json_view_rejects_wrong_content_type_and_oversized_file(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        wrong_type = SimpleUploadedFile(
+            "test_college.json", b"{}", content_type="text/plain"
+        )
+        response = self.client.post("/upload/", {"json_file": wrong_type})
+        self.assertContains(response, "Invalid file type")
+
+        oversized = SimpleUploadedFile(
+            "test_college.json", b"x" * (5 * 1024 * 1024 + 1), content_type="application/json"
+        )
+        response = self.client.post("/upload/", {"json_file": oversized})
+        self.assertContains(response, "too large")
+
     def test_generate_timetable_view(self):
         response = self.client.post("/generate/", {"semester_id": self.semester.id}, follow=True)
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Successfully generated timetable")
+        self.assertEqual(SolverRun.objects.filter(semester=self.semester).count(), 1)
 
     def test_timetable_view_grid(self):
         # Generate timetable first

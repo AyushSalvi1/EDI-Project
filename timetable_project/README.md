@@ -20,7 +20,7 @@ python manage.py import_college_data sample_college_data.json
 
 python manage.py createsuperuser
 
-# (A default admin is already created: admin / admin123)
+# Create an administrator interactively with `python manage.py createsuperuser`.
 
 ### Step 6: Start the Development Server
 
@@ -32,7 +32,7 @@ python manage.py runserver
 - 📤 Upload JSON Data: http://127.0.0.1:8000/upload/
 - ⚙️ Generate Timetable: http://127.0.0.1:8000/generate/
 - 📅 Interactive Timetable Grid: http://127.0.0.1:8000/timetable/
-- 🔐 Django Admin Panel: http://127.0.0.1:8000/admin/ (admin / admin123)
+- 🔐 Django Admin Panel: http://127.0.0.1:8000/admin/ (create an account with `python manage.py createsuperuser`)
 
 ### 🧪 Run Automated Tests
 
@@ -43,6 +43,8 @@ python manage.py test
 A Django-based, conflict-free college timetable generation system powered by **Google OR-Tools CP-SAT (Constraint Programming - Satisfiability)** and **SQLite**.
 
 This application solves the university course timetabling problem (UCTP) for all college divisions (1st through 4th year) covering an entire semester from a single JSON input file. It features mathematical conflict-elimination guarantees, soft-objective optimization for over-committed workloads, automated bottleneck diagnostics, and a responsive web interface with print-ready timetable grids.
+
+Room capacity is enforced as a hard scheduling constraint, and repeated data imports are isolated by semester so each upload preserves its own divisions and assignments.
 
 ---
 
@@ -86,7 +88,7 @@ python manage.py import_college_data sample_college_data.json
 
 ### Step 5: (Optional) Create an Admin User
 
-A default admin account is already created (`admin` / `admin123`). To create a new one:
+To create an administrator account:
 
 ```powershell
 python manage.py createsuperuser
@@ -106,11 +108,11 @@ Once the server starts, navigate to:
 - 📤 **Upload JSON Data**: [http://127.0.0.1:8000/upload/](http://127.0.0.1:8000/upload/)
 - ⚙️ **Generate Timetable & View Issues**: [http://127.0.0.1:8000/generate/](http://127.0.0.1:8000/generate/)
 - 📅 **Interactive Division Timetable Grid**: [http://127.0.0.1:8000/timetable/](http://127.0.0.1:8000/timetable/)
-- 🔐 **Django Admin Panel**: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/) _(Username: `admin`, Password: `admin123`)_
+- 🔐 **Django Admin Panel**: [http://127.0.0.1:8000/admin/](http://127.0.0.1:8000/admin/). Create an administrator with `python manage.py createsuperuser`.
 
 ### 🧪 Run Automated Tests
 
-Verify all 9 constraint and solver tests anytime with:
+Verify all 11 constraint, solver, and web-flow tests anytime with:
 
 ```powershell
 python manage.py test
@@ -213,7 +215,7 @@ $$\sum_{a \in \mathcal{A}} x_{a, r, t} \le 1 \quad \forall r \in \mathcal{R}, \,
 For each declared unavailable slot $t_{\text{unavail}}$ for teacher $\tau$:
 $$x_{a, r, t_{\text{unavail}}} = 0 \quad \forall a \in \mathcal{A} \,|\, \text{teacher}_a = \tau, \, \forall r \in \mathcal{R}$$
 
-#### Constraint 6: Workload Ceiling
+#### Constraint 6: Assignment Weekly-Hours Cap
 
 An assignment is never scheduled for more hours than requested by the curriculum:
 $$\sum_{r \in \mathcal{R}} \sum_{t \in \mathcal{T}} x_{a, r, t} \le \text{weekly\_hours}(a) \quad \forall a \in \mathcal{A}$$
@@ -404,7 +406,7 @@ Create a superuser to access the management portal:
 python manage.py createsuperuser
 ```
 
-_(Default testing credentials: username `admin`, password `admin123`)_
+Create an administrator interactively with `python manage.py createsuperuser`.
 
 ### 5. Import College Data
 
@@ -482,7 +484,7 @@ The application will be live at:
 
 ## Automated Verification & Testing Suite
 
-The application includes an automated test suite in `scheduler/tests.py` containing 9 comprehensive tests.
+The application includes an automated test suite in `scheduler/tests.py` containing 11 comprehensive tests.
 
 Run the test suite with:
 

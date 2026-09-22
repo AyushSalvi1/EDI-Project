@@ -1,6 +1,6 @@
 import json
 import re
-from datetime import datetime, time
+from datetime import datetime
 from django.db import transaction
 from django.core.exceptions import ValidationError
 
@@ -258,8 +258,8 @@ def import_college_data_from_dict(data: dict) -> dict:
                 number_of_divisions=y_entry["number_of_divisions"],
                 strength=y_entry["strength_per_division"]
             )
-            for d in divs:
-                division_lookup[(d.year, d.division_number)] = d
+            for local_division_number, d in enumerate(divs, start=1):
+                division_lookup[(d.year, local_division_number)] = d
                 created_divisions.append(d)
 
         # 4. Create Subjects
@@ -317,15 +317,25 @@ def import_college_data_from_dict(data: dict) -> dict:
             for a_entry in t_entry.get("allocations", []):
                 div_obj = division_lookup.get((a_entry["year"], a_entry["division"]))
                 subj_obj = subject_lookup.get(a_entry["subject_id"])
-                if div_obj and subj_obj:
-                    assignment = Assignment.objects.create(
-                        semester=semester,
-                        teacher=teacher,
-                        subject=subj_obj,
-                        division=div_obj,
-                        total_hours_for_semester=a_entry["total_hours_for_semester"]
+                if not div_obj:
+                    raise ValidationError(
+                        f"Teacher '{t_entry['name']}' allocation references "
+                        f"unresolved division {a_entry['year']}-{a_entry['division']}."
                     )
-                    created_assignments.append(assignment)
+                if not subj_obj:
+                    raise ValidationError(
+                        f"Teacher '{t_entry['name']}' allocation references "
+                        f"unresolved subject_id '{a_entry['subject_id']}'."
+                    )
+
+                assignment = Assignment.objects.create(
+                    semester=semester,
+                    teacher=teacher,
+                    subject=subj_obj,
+                    division=div_obj,
+                    total_hours_for_semester=a_entry["total_hours_for_semester"]
+                )
+                created_assignments.append(assignment)
 
         return {
             "semester": semester,

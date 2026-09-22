@@ -1,4 +1,8 @@
 from collections import defaultdict
+import logging
+import time
+
+import psutil
 from django.db import transaction
 from ortools.sat.python import cp_model
 
@@ -10,7 +14,10 @@ from .models import (
     TeacherUnavailability,
     TimetableEntry,
     SchedulingIssue,
+    SolverRun,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TimetableSolverError(Exception):
@@ -103,7 +110,11 @@ def generate_timetable(semester_id: int) -> dict:
     teacher_all_vars = defaultdict(list)     # teacher_id -> list of vars
 
     for a in assignments:
-        matching_rooms = lab_rooms if a.subject.is_lab else regular_rooms
+        matching_rooms = [
+            room
+            for room in (lab_rooms if a.subject.is_lab else regular_rooms)
+            if room.capacity >= a.division.strength
+        ]
         t_id = a.teacher.id
         div_id = a.division.id
 
@@ -161,7 +172,30 @@ def generate_timetable(semester_id: int) -> dict:
     solver.parameters.max_time_in_seconds = 30.0
     solver.parameters.num_workers = 4
 
+    process = psutil.Process()
+    cpu_percent_before = psutil.cpu_percent(interval=None)
+    ram_used_before_mb = process.memory_info().rss / (1024 * 1024)
+    variable_count = len(model.Proto().variables)
+    constraint_count = len(model.Proto().constraints)
+    solve_started = time.perf_counter()
     status = solver.Solve(model)
+    wall_time_seconds = time.perf_counter() - solve_started
+    cpu_percent_after = psutil.cpu_percent(interval=None)
+    ram_used_after_mb = process.memory_info().rss / (1024 * 1024)
+    solver_status = solver.StatusName(status)
+
+    resource_metrics = {
+        "cpu_percent_before": round(cpu_percent_before, 2),
+        "cpu_percent_after": round(cpu_percent_after, 2),
+        "ram_used_before_mb": round(ram_used_before_mb, 2),
+        "ram_used_after_mb": round(ram_used_after_mb, 2),
+        "wall_time_seconds": round(wall_time_seconds, 4),
+        "variable_count": variable_count,
+        "constraint_count": constraint_count,
+        "solver_status": solver_status,
+    }
+    logger.info("Solver resource metrics: %s", resource_metrics)
+    SolverRun.objects.create(semester=semester, **resource_metrics)
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         raise TimetableSolverError(
@@ -217,7 +251,22 @@ def generate_timetable(semester_id: int) -> dict:
             div = a.division
             unavail_count = len(teacher_unavail[t.id])
 
-            if teacher_requested_totals[t.id] > t.max_hours_per_week:
+            matching_rooms = [
+                room
+                for room in (lab_rooms if a.subject.is_lab else regular_rooms)
+                if room.capacity >= div.strength
+            ]
+
+            if not matching_rooms:
+                reasons.append(
+                    f"No room with sufficient capacity is available for {div.name}; "
+                    f"the division requires at least {div.strength} seats."
+                )
+                suggestions.append(
+                    f"Add or configure a {'lab' if a.subject.is_lab else 'regular'} room "
+                    f"with capacity of at least {div.strength} seats."
+                )
+            elif teacher_requested_totals[t.id] > t.max_hours_per_week:
                 reasons.append(
                     f"{t.name}'s total assigned workload ({teacher_requested_totals[t.id]}h/wk) "
                     f"exceeds maximum allowed limit of {t.max_hours_per_week}h/wk."
