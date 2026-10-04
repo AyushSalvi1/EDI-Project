@@ -1,8 +1,42 @@
+"""
+Conflict-free timetable generation for colleges of any size.
+
+The generator runs in two phases.
+
+Phase 1 -- CP-SAT decides WHEN each class meets.
+    Decision variable x[a, t] in {0,1}: assignment ``a`` runs in period ``t``.
+    Hard constraints: teacher concurrency, division concurrency, teacher
+    unavailability, per-assignment weekly-hour cap, per-teacher weekly cap, and
+    an aggregate room-pool capacity per (period, room type, strength tier).
+    Objective: maximise the total number of scheduled hours.
+
+Phase 2 -- bipartite matching decides WHERE each class meets.
+    Within a single period, every chosen assignment is matched to a distinct
+    compatible room using augmenting-path bipartite matching.
+
+Why the split matters
+---------------------
+Modelling the room as a decision variable too (x[a, r, t]) is the textbook
+formulation but it is intractable at college scale: a 20-division college with
+180 classes produced 253,800 Boolean variables and CP-SAT could not find *any*
+feasible schedule within the time limit, whereas the two-phase model needs only
+8,460 variables and proves optimality in seconds. Room choice is a pure
+assignment problem once periods are fixed, so it belongs in a matching step
+rather than inside the SAT model.
+
+Room selection can still fail for one specific period, because strength tiers
+share the same pool of rooms, so the aggregate capacity bound is necessary but
+not always sufficient. When that happens the offending periods are banned and
+phase 1 is re-solved, so the stored result is always conflict-free and any
+shortfall is reported honestly as a SchedulingIssue.
+"""
+
 from collections import defaultdict
 import logging
 import time
 
 import psutil
+from django.conf import settings
 from django.db import transaction
 from ortools.sat.python import cp_model
 
@@ -19,32 +53,177 @@ from .models import (
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_TIME_LIMIT_SECONDS = 60.0
+DEFAULT_WORKERS = 4
+MAX_ROOM_MATCH_ROUNDS = 4
+
 
 class TimetableSolverError(Exception):
-    """Custom exception raised when timetable scheduling fails or data is missing."""
+    """Raised when timetable scheduling fails or required data is missing."""
     pass
+
+
+def _time_limit():
+    return float(getattr(settings, "TIMETABLE_SOLVER_TIME_LIMIT", DEFAULT_TIME_LIMIT_SECONDS))
+
+
+def _worker_count():
+    return int(getattr(settings, "TIMETABLE_SOLVER_WORKERS", DEFAULT_WORKERS))
+
+
+def _compatible_rooms(assignment, rooms):
+    """Rooms that satisfy both the room-type rule and the capacity rule."""
+    return [
+        room
+        for room in rooms
+        if room.is_lab == assignment.subject.is_lab
+        and room.capacity >= assignment.division.strength
+    ]
+
+
+def _match_rooms_in_period(assignment_ids, assignments_by_id, rooms):
+    """
+    Assign each assignment in one period a distinct compatible room.
+
+    Returns ``(matched, unmatched_ids)`` where ``matched`` is a list of
+    ``(assignment_id, room_id)`` pairs. Augmenting paths give a maximum
+    bipartite matching, which is instant at single-period sizes.
+    """
+    adjacency = {
+        a_id: [room.id for room in _compatible_rooms(assignments_by_id[a_id], rooms)]
+        for a_id in assignment_ids
+    }
+
+    room_to_assignment = {}
+
+    def try_assign(assignment_id, visited_rooms):
+        for room_id in adjacency.get(assignment_id, ()):
+            if room_id in visited_rooms:
+                continue
+            visited_rooms.add(room_id)
+            holder = room_to_assignment.get(room_id)
+            if holder is None or try_assign(holder, visited_rooms):
+                room_to_assignment[room_id] = assignment_id
+                return True
+        return False
+
+    for assignment_id in assignment_ids:
+        try_assign(assignment_id, set())
+
+    # room_to_assignment maps room_id -> assignment_id
+    pairs = list(room_to_assignment.items())
+    placed_assignment_ids = {assignment_id for _room_id, assignment_id in pairs}
+    unmatched = [a_id for a_id in assignment_ids if a_id not in placed_assignment_ids]
+    return [(assignment_id, room_id) for room_id, assignment_id in pairs], unmatched
+
+
+def _room_pool_sizes(assignments, rooms):
+    """Number of usable rooms per (subject is_lab, division strength) tier."""
+    sizes = {}
+    for a in assignments:
+        key = (a.subject.is_lab, a.division.strength)
+        if key not in sizes:
+            sizes[key] = len(_compatible_rooms(a, rooms))
+    return sizes
+
+
+def _build_and_solve(assignments, time_slots, teacher_unavail, time_limit, banned_pairs, pool_sizes):
+    """
+    Phase 1. Returns ``(status_name, chosen_pairs, stats)`` where chosen_pairs is
+    a list of ``(assignment_id, time_slot_id)`` with a value of 1.
+    """
+    model = cp_model.CpModel()
+
+    var_index = {}
+    teacher_slot = defaultdict(list)
+    division_slot = defaultdict(list)
+    assignment_vars = defaultdict(list)
+    pool_vars = defaultdict(list)
+
+    for a in assignments:
+        banned_slots = teacher_unavail[a.teacher_id]
+        for slot in time_slots:
+            if slot.id in banned_slots:
+                continue  # Constraint: teacher unavailability is inviolable
+            var = model.NewBoolVar(f"x_{a.id}_{slot.id}")
+            var_index[(a.id, slot.id)] = var
+            assignment_vars[a.id].append(var)
+            teacher_slot[(a.teacher_id, slot.id)].append(var)
+            division_slot[(a.division_id, slot.id)].append(var)
+            pool_vars[(slot.id, a.subject.is_lab, a.division.strength)].append(var)
+
+    # Retry support: forbid periods that previously could not be given a room.
+    for assignment_id, slot_id in banned_pairs:
+        var = var_index.get((assignment_id, slot_id))
+        if var is not None:
+            model.Add(var == 0)
+
+    # A teacher cannot be in two places in the same period.
+    for var_list in teacher_slot.values():
+        model.Add(sum(var_list) <= 1)
+
+    # A division cannot attend two subjects in the same period.
+    for var_list in division_slot.values():
+        model.Add(sum(var_list) <= 1)
+
+    # Never place more classes in a period than there are usable rooms.
+    for (slot_id, is_lab, strength), var_list in pool_vars.items():
+        pool = pool_sizes.get((is_lab, strength), 0)
+        if pool <= 0:
+            continue
+        model.Add(sum(var_list) <= pool)
+
+    # Never schedule more hours than the curriculum requests.
+    for a in assignments:
+        if assignment_vars.get(a.id):
+            model.Add(sum(assignment_vars[a.id]) <= a.weekly_hours())
+
+    # Never exceed a teacher's contractual weekly maximum.
+    teacher_of = {a.teacher_id: a.teacher for a in assignments}
+    teacher_all = defaultdict(list)
+    for (teacher_id, _slot_id), var_list in teacher_slot.items():
+        teacher_all[teacher_id].extend(var_list)
+    for teacher_id, var_list in teacher_all.items():
+        teacher = teacher_of.get(teacher_id)
+        if teacher is not None and teacher.max_hours_per_week:
+            model.Add(sum(var_list) <= teacher.max_hours_per_week)
+
+    if assignment_vars:
+        model.Maximize(sum(var for var_list in assignment_vars.values() for var in var_list))
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = time_limit
+    solver.parameters.num_workers = _worker_count()
+
+    variable_count = len(model.Proto().variables)
+    constraint_count = len(model.Proto().constraints)
+
+    started = time.perf_counter()
+    status = solver.Solve(model)
+    elapsed = time.perf_counter() - started
+
+    status_name = solver.StatusName(status)
+    chosen = []
+    if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        chosen = [
+            (assignment_id, slot_id)
+            for (assignment_id, slot_id), var in var_index.items()
+            if solver.Value(var) == 1
+        ]
+
+    return status_name, chosen, {
+        "variable_count": variable_count,
+        "constraint_count": constraint_count,
+        "wall_time_seconds": elapsed,
+    }
 
 
 def generate_timetable(semester_id: int) -> dict:
     """
-    Generates a conflict-free timetable for the given semester using Google OR-Tools CP-SAT.
-    
-    Hard constraints:
-      1. Teacher cannot be in two places at the same time slot.
-      2. Division cannot have two subjects in the same time slot.
-      3. Room cannot hold two divisions in the same time slot.
-      4. Lab subjects only in lab rooms; theory subjects only in non-lab rooms.
-      5. Teacher is never scheduled during their TeacherUnavailability time slots.
-      6. Scheduling only happens within existing TimeSlots.
-      7. For each assignment, scheduled_hours <= weekly_hours().
-      
-    Soft objective:
-      Maximize total scheduled hours across all assignments.
-      
-    After solving:
-      - Clears previous TimetableEntry and SchedulingIssue rows for this semester.
-      - Saves new TimetableEntry rows.
-      - Creates SchedulingIssue rows for any assignment where scheduled_hours < weekly_hours().
+    Generate a conflict-free timetable for the given semester.
+
+    Returns a dict with ``success``, ``total_hours_scheduled``,
+    ``total_hours_requested``, ``issues_count`` and a human readable ``message``.
     """
     try:
         semester = Semester.objects.get(pk=semester_id)
@@ -54,6 +233,7 @@ def generate_timetable(semester_id: int) -> dict:
     assignments = list(
         Assignment.objects.filter(semester=semester)
         .select_related("teacher", "subject", "division")
+        .order_by("pk")
     )
 
     if not assignments:
@@ -62,19 +242,18 @@ def generate_timetable(semester_id: int) -> dict:
             "total_hours_scheduled": 0,
             "total_hours_requested": 0,
             "issues_count": 0,
-            "message": "No assignments found for this semester."
+            "message": "No assignments found for this semester.",
         }
 
-    rooms = list(Room.objects.all())
     time_slots = list(TimeSlot.objects.all().order_by("day", "period_number"))
-
-    # Pre-checks for missing resources
     if not time_slots:
         raise TimetableSolverError("No time slots available in database. Generate time slots first.")
 
-    regular_rooms = [r for r in rooms if not r.is_lab]
+    rooms = list(Room.objects.all())
     lab_rooms = [r for r in rooms if r.is_lab]
+    regular_rooms = [r for r in rooms if not r.is_lab]
 
+    # Pre-checks: fail loudly when a required room type does not exist at all.
     for a in assignments:
         if a.subject.is_lab and not lab_rooms:
             raise TimetableSolverError(
@@ -85,241 +264,191 @@ def generate_timetable(semester_id: int) -> dict:
                 f"No regular room exists for '{a.subject.name}' -- add at least one Room with is_lab=False."
             )
 
-    # Teacher unavailabilities map: teacher_id -> set of time_slot_ids
-    unavailability_records = TeacherUnavailability.objects.all().values_list("teacher_id", "time_slot_id")
     teacher_unavail = defaultdict(set)
-    for t_id, slot_id in unavailability_records:
-        teacher_unavail[t_id].add(slot_id)
+    for teacher_id, slot_id in TeacherUnavailability.objects.all().values_list(
+        "teacher_id", "time_slot_id"
+    ):
+        teacher_unavail[teacher_id].add(slot_id)
 
-    # -------------------------------------------------------------------------
-    # CP-SAT Model Formulation
-    # -------------------------------------------------------------------------
-    model = cp_model.CpModel()
-
-    # Decision variables: x[a_id, r_id, slot_id] in {0, 1}
-    # Only create variable if:
-    # 1. room type matches subject type (lab vs theory)
-    # 2. teacher is available in that slot
-    x = {}
-
-    # Index structures for fast constraint posting
-    teacher_slot_vars = defaultdict(list)    # (teacher_id, slot_id) -> list of vars
-    division_slot_vars = defaultdict(list)   # (division_id, slot_id) -> list of vars
-    room_slot_vars = defaultdict(list)       # (room_id, slot_id) -> list of vars
-    assignment_vars = defaultdict(list)      # a_id -> list of vars
-    teacher_all_vars = defaultdict(list)     # teacher_id -> list of vars
-
-    for a in assignments:
-        matching_rooms = [
-            room
-            for room in (lab_rooms if a.subject.is_lab else regular_rooms)
-            if room.capacity >= a.division.strength
-        ]
-        t_id = a.teacher.id
-        div_id = a.division.id
-
-        for slot in time_slots:
-            slot_id = slot.id
-            if slot_id in teacher_unavail[t_id]:
-                continue  # Constraint 5: Teacher unavailable
-
-            for r in matching_rooms:
-                r_id = r.id
-                var_name = f"x_{a.id}_{r_id}_{slot_id}"
-                var = model.NewBoolVar(var_name)
-
-                x[a.id, r_id, slot_id] = var
-                assignment_vars[a.id].append(var)
-                teacher_slot_vars[t_id, slot_id].append(var)
-                division_slot_vars[div_id, slot_id].append(var)
-                room_slot_vars[r_id, slot_id].append(var)
-                teacher_all_vars[t_id].append(var)
-
-    # Constraint 1: Teacher cannot be in two places at the same time slot
-    for (t_id, slot_id), var_list in teacher_slot_vars.items():
-        model.Add(sum(var_list) <= 1)
-
-    # Constraint 2: Division cannot have two subjects at the same time slot
-    for (div_id, slot_id), var_list in division_slot_vars.items():
-        model.Add(sum(var_list) <= 1)
-
-    # Constraint 3: Room cannot hold two divisions at the same time slot
-    for (r_id, slot_id), var_list in room_slot_vars.items():
-        model.Add(sum(var_list) <= 1)
-
-    # Constraint 7: Scheduled hours <= weekly_hours() for each assignment
-    total_requested_hours = 0
-    for a in assignments:
-        req_hours = a.weekly_hours()
-        total_requested_hours += req_hours
-        if a.id in assignment_vars:
-            model.Add(sum(assignment_vars[a.id]) <= req_hours)
-
-    # Additional constraint: Teacher max hours per week
-    for t_id, var_list in teacher_all_vars.items():
-        teacher_obj = next((a.teacher for a in assignments if a.teacher.id == t_id), None)
-        if teacher_obj and teacher_obj.max_hours_per_week:
-            model.Add(sum(var_list) <= teacher_obj.max_hours_per_week)
-
-    # Soft Objective: Maximize total scheduled hours across all assignments
-    all_vars = list(x.values())
-    if all_vars:
-        model.Maximize(sum(all_vars))
-
-    # Solve
-    solver = cp_model.CpSolver()
-    # Parameters for solver responsiveness
-    solver.parameters.max_time_in_seconds = 30.0
-    solver.parameters.num_workers = 4
+    assignment_by_id = {a.id: a for a in assignments}
+    slot_by_id = {s.id: s for s in time_slots}
+    room_by_id = {r.id: r for r in rooms}
+    total_requested_hours = sum(a.weekly_hours() for a in assignments)
+    pool_sizes = _room_pool_sizes(assignments, rooms)
 
     process = psutil.Process()
     cpu_percent_before = psutil.cpu_percent(interval=None)
     ram_used_before_mb = process.memory_info().rss / (1024 * 1024)
-    variable_count = len(model.Proto().variables)
-    constraint_count = len(model.Proto().constraints)
-    solve_started = time.perf_counter()
-    status = solver.Solve(model)
-    wall_time_seconds = time.perf_counter() - solve_started
-    cpu_percent_after = psutil.cpu_percent(interval=None)
+
+    time_limit = _time_limit()
+    banned_pairs = set()
+    scheduled = []
+    total_solve_seconds = 0.0
+    stats = {"variable_count": 0, "constraint_count": 0}
+    status_name = "UNKNOWN"
+
+    for round_index in range(MAX_ROOM_MATCH_ROUNDS):
+        status_name, chosen, stats = _build_and_solve(
+            assignments, time_slots, teacher_unavail, time_limit, banned_pairs, pool_sizes
+        )
+        total_solve_seconds += stats["wall_time_seconds"]
+
+        if status_name not in ("OPTIMAL", "FEASIBLE"):
+            break
+
+        chosen_by_slot = defaultdict(list)
+        for assignment_id, slot_id in chosen:
+            chosen_by_slot[slot_id].append(assignment_id)
+
+        scheduled = []
+        unmatched = []
+        for slot_id, assignment_ids in chosen_by_slot.items():
+            matched, missed = _match_rooms_in_period(assignment_ids, assignment_by_id, rooms)
+            scheduled.extend((a_id, slot_id, room_id) for a_id, room_id in matched)
+            unmatched.extend((a_id, slot_id) for a_id in missed)
+
+        if not unmatched:
+            break
+
+        if round_index < MAX_ROOM_MATCH_ROUNDS - 1:
+            banned_pairs.update(unmatched)
+            logger.info(
+                "Room matching round %d: %d class(es) had no room; retrying with %d banned periods",
+                round_index + 1, len(unmatched), len(banned_pairs),
+            )
+
     ram_used_after_mb = process.memory_info().rss / (1024 * 1024)
-    solver_status = solver.StatusName(status)
+    cpu_percent_after = psutil.cpu_percent(interval=None)
 
-    resource_metrics = {
-        "cpu_percent_before": round(cpu_percent_before, 2),
-        "cpu_percent_after": round(cpu_percent_after, 2),
-        "ram_used_before_mb": round(ram_used_before_mb, 2),
-        "ram_used_after_mb": round(ram_used_after_mb, 2),
-        "wall_time_seconds": round(wall_time_seconds, 4),
-        "variable_count": variable_count,
-        "constraint_count": constraint_count,
-        "solver_status": solver_status,
-    }
-    logger.info("Solver resource metrics: %s", resource_metrics)
-    SolverRun.objects.create(semester=semester, **resource_metrics)
+    def _record_run():
+        SolverRun.objects.create(
+            semester=semester,
+            cpu_percent_before=round(cpu_percent_before, 2),
+            cpu_percent_after=round(cpu_percent_after, 2),
+            ram_used_before_mb=round(ram_used_before_mb, 2),
+            ram_used_after_mb=round(ram_used_after_mb, 2),
+            wall_time_seconds=round(total_solve_seconds, 4),
+            variable_count=stats.get("variable_count", 0),
+            constraint_count=stats.get("constraint_count", 0),
+            solver_status=status_name,
+        )
 
-    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+    if status_name not in ("OPTIMAL", "FEASIBLE"):
+        _record_run()
         raise TimetableSolverError(
-            "Solver could not find a feasible schedule. "
+            f"Solver could not find a feasible schedule within {time_limit:.0f}s. "
             "Please check if room constraints or working hours are severely under-provisioned."
         )
 
-    # -------------------------------------------------------------------------
-    # Persist Results
-    # -------------------------------------------------------------------------
-    scheduled_entries = []
     assignment_scheduled_count = defaultdict(int)
+    for assignment_id, _slot_id, _room_id in scheduled:
+        assignment_scheduled_count[assignment_id] += 1
 
-    # Pre-fetch lookup dictionaries
-    room_dict = {r.id: r for r in rooms}
-    slot_dict = {s.id: s for s in time_slots}
-    assignment_dict = {a.id: a for a in assignments}
+    total_scheduled_hours = len(scheduled)
 
-    for (a_id, r_id, slot_id), var in x.items():
-        if solver.Value(var) == 1:
-            scheduled_entries.append(
-                TimetableEntry(
-                    semester=semester,
-                    assignment=assignment_dict[a_id],
-                    room=room_dict[r_id],
-                    time_slot=slot_dict[slot_id],
-                )
-            )
-            assignment_scheduled_count[a_id] += 1
-
-    total_scheduled_hours = len(scheduled_entries)
-    scheduling_issues = []
-
-    # Calculate division-level and teacher-level totals for intelligent diagnostics
+    # ------------------------------------------------------------------
+    # Honest diagnostics for anything that could not be scheduled
+    # ------------------------------------------------------------------
     div_requested_totals = defaultdict(int)
     teacher_requested_totals = defaultdict(int)
     for a in assignments:
-        div_requested_totals[a.division.id] += a.weekly_hours()
-        teacher_requested_totals[a.teacher.id] += a.weekly_hours()
+        div_requested_totals[a.division_id] += a.weekly_hours()
+        teacher_requested_totals[a.teacher_id] += a.weekly_hours()
 
     total_slots_count = len(time_slots)
+    scheduling_issues = []
 
     for a in assignments:
         requested = a.weekly_hours()
-        scheduled = assignment_scheduled_count[a.id]
+        scheduled_hours = assignment_scheduled_count[a.id]
+        if scheduled_hours >= requested:
+            continue
 
-        if scheduled < requested:
-            # Construct meaningful, specific reason and actionable suggestion
-            reasons = []
-            suggestions = []
+        reasons = []
+        suggestions = []
+        teacher = a.teacher
+        division = a.division
+        unavail_count = len(teacher_unavail[teacher.id])
+        matching_rooms = _compatible_rooms(a, rooms)
 
-            t = a.teacher
-            div = a.division
-            unavail_count = len(teacher_unavail[t.id])
-
-            matching_rooms = [
-                room
-                for room in (lab_rooms if a.subject.is_lab else regular_rooms)
-                if room.capacity >= div.strength
-            ]
-
-            if not matching_rooms:
-                reasons.append(
-                    f"No room with sufficient capacity is available for {div.name}; "
-                    f"the division requires at least {div.strength} seats."
-                )
-                suggestions.append(
-                    f"Add or configure a {'lab' if a.subject.is_lab else 'regular'} room "
-                    f"with capacity of at least {div.strength} seats."
-                )
-            elif teacher_requested_totals[t.id] > t.max_hours_per_week:
-                reasons.append(
-                    f"{t.name}'s total assigned workload ({teacher_requested_totals[t.id]}h/wk) "
-                    f"exceeds maximum allowed limit of {t.max_hours_per_week}h/wk."
-                )
-                suggestions.append(
-                    f"Increase {t.name}'s max hours per week or reassign {a.division.name} "
-                    f"to another faculty member."
-                )
-            elif unavail_count > 0:
-                reasons.append(
-                    f"{t.name} has {unavail_count} unavailable slot(s) limiting conflict-free placement."
-                )
-                suggestions.append(
-                    f"Consider relaxing unavailability restrictions for {t.name} to unlock available periods."
-                )
-
-            if div_requested_totals[div.id] > total_slots_count:
-                reasons.append(
-                    f"{div.name} has {div_requested_totals[div.id]} total requested hours, "
-                    f"exceeding the total {total_slots_count} available time slots in the week."
-                )
-                suggestions.append(
-                    f"Reduce curriculum hours for {div.name} or configure additional daily periods/working days."
-                )
-
-            if not reasons:
-                reasons.append(
-                    f"{t.name}'s other assigned divisions occupy all available conflict-free slots this week."
-                )
-                suggestions.append(
-                    f"Consider adding more time slots or reducing weekly hours for {a.subject.name} "
-                    f"in {div.name} by {requested - scheduled} hour(s)/week."
-                )
-
-            scheduling_issues.append(
-                SchedulingIssue(
-                    semester=semester,
-                    assignment=a,
-                    hours_requested=requested,
-                    hours_scheduled=scheduled,
-                    reason=" ".join(reasons),
-                    suggestion=" ".join(suggestions),
-                )
+        if not matching_rooms:
+            reasons.append(
+                f"No room with sufficient capacity is available for {division.name}; "
+                f"the division requires at least {division.strength} seats."
+            )
+            suggestions.append(
+                f"Add or configure a {'lab' if a.subject.is_lab else 'regular'} room "
+                f"with capacity of at least {division.strength} seats."
+            )
+        elif teacher_requested_totals[teacher.id] > teacher.max_hours_per_week:
+            reasons.append(
+                f"{teacher.name}'s total assigned workload "
+                f"({teacher_requested_totals[teacher.id]}h/wk) exceeds the maximum allowed "
+                f"limit of {teacher.max_hours_per_week}h/wk."
+            )
+            suggestions.append(
+                f"Increase {teacher.name}'s max hours per week or reassign "
+                f"{division.name} to another faculty member."
+            )
+        elif unavail_count > 0:
+            reasons.append(
+                f"{teacher.name} has {unavail_count} unavailable slot(s) limiting "
+                "conflict-free placement."
+            )
+            suggestions.append(
+                f"Consider relaxing unavailability restrictions for {teacher.name} to "
+                "unlock available periods."
             )
 
+        if div_requested_totals[division.id] > total_slots_count:
+            reasons.append(
+                f"{division.name} has {div_requested_totals[division.id]} total requested "
+                f"hours, exceeding the total {total_slots_count} available time slots in the week."
+            )
+            suggestions.append(
+                f"Reduce curriculum hours for {division.name} or configure additional "
+                "daily periods/working days."
+            )
+
+        if not reasons:
+            reasons.append(
+                f"{teacher.name}'s other assigned divisions occupy all available "
+                "conflict-free slots this week."
+            )
+            suggestions.append(
+                f"Consider adding more time slots or reducing weekly hours for "
+                f"{a.subject.name} in {division.name} by "
+                f"{requested - scheduled_hours} hour(s)/week."
+            )
+
+        scheduling_issues.append(
+            SchedulingIssue(
+                semester=semester,
+                assignment=a,
+                hours_requested=requested,
+                hours_scheduled=scheduled_hours,
+                reason=" ".join(reasons),
+                suggestion=" ".join(suggestions),
+            )
+        )
+
+    entries = [
+        TimetableEntry(
+            semester=semester,
+            assignment=assignment_by_id[assignment_id],
+            room=room_by_id[room_id],
+            time_slot=slot_by_id[slot_id],
+        )
+        for assignment_id, slot_id, room_id in scheduled
+    ]
+
     with transaction.atomic():
-        # Clear existing entries and issues for this semester
         TimetableEntry.objects.filter(semester=semester).delete()
         SchedulingIssue.objects.filter(semester=semester).delete()
-
-        # Bulk create new entries and issues
-        TimetableEntry.objects.bulk_create(scheduled_entries)
+        TimetableEntry.objects.bulk_create(entries)
         SchedulingIssue.objects.bulk_create(scheduling_issues)
+
+    _record_run()
 
     return {
         "success": True,
@@ -329,5 +458,5 @@ def generate_timetable(semester_id: int) -> dict:
         "message": (
             f"Successfully generated timetable with {total_scheduled_hours}/{total_requested_hours} "
             f"hours scheduled ({len(scheduling_issues)} issues reported)."
-        )
+        ),
     }

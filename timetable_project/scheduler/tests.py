@@ -1,7 +1,13 @@
+import json
 from collections import Counter
+from datetime import time
+from io import BytesIO
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
+
+from reportlab.pdfgen import canvas as reportlab_canvas
 
 User = get_user_model()
 
@@ -16,12 +22,21 @@ from scheduler.models import (
     TimetableChangeLog,
     SchedulingIssue,
     SolverRun,
+    Semester,
     TimeSlot,
     generate_time_slots,
+    Notification,
+    ProposedChange,
+    SchedulingPreference,
 )
+from scheduler.capacity import analyse_capacity
 from scheduler.edits import delete_entry, move_entry, placement_conflicts, swap_entries
 from scheduler.importer import import_college_data_from_dict
+from scheduler.pdf_import import build_payload, classify_tables
+from scheduler.recommendations import recommend_for_semester
 from scheduler.solver import generate_timetable, TimetableSolverError
+
+Canvas = reportlab_canvas.Canvas
 
 
 class TimetableGeneratorTestCase(TestCase):
@@ -322,7 +337,7 @@ class TimetableWebViewsTestCase(TestCase):
             self.assertRedirects(response, f"/login/?next={path}")
 
     def test_non_admin_cannot_reach_admin_pages(self):
-        plain = User.objects.create_user("limited_viewer", password="password123")
+        User.objects.create_user("limited_viewer", password="password123")
 
         self.client.logout()
         self.client.login(username="limited_viewer", password="password123")
@@ -554,14 +569,14 @@ class RoleBasedAccessTestCase(TestCase):
     def test_staff_sees_admin_navigation_not_limited_navigation(self):
         self.client.login(username="portal_admin", password="password123")
         response = self.client.get("/")
-        self.assertContains(response, "Upload JSON")
+        self.assertContains(response, "/upload/pdf/")
         self.assertContains(response, "Manage")
 
         self.client.logout()
         self.client.login(username="stu_div1", password="password123")
         response = self.client.get("/my-timetable/")
         self.assertContains(response, "My Timetable")
-        self.assertNotContains(response, "Upload JSON")
+        self.assertNotContains(response, "/upload/pdf/")
 
     # ------------------------------------------------------------ auth flow
     def test_login_page_is_public_and_successful_login_routes_by_role(self):
@@ -856,3 +871,725 @@ class ManualTimetableEditTestCase(TestCase):
         for entry in response.context["page"]:
             self.assertEqual(entry.assignment.division_id, division.id)
 
+
+
+class PdfImportParsingTestCase(TestCase):
+    """Column detection, calendar aliases and payload building are pure text work."""
+
+    def test_detects_tables_by_role_and_maps_columns_in_any_order(self):
+        tables = [
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Room No.", "Seat Capacity", "Room Type"],
+                "rows": [["LH-101", "70", "Classroom"], ["LAB-A", "60", "Lab"]],
+            },
+            {
+                "index": 1,
+                "page": 1,
+                "headers": ["Yr", "Faculty Name", "Div", "Subject", "Total Hours"],
+                "rows": [["2", "Dr. Rao", "1", "Data Structures", "4"]],
+            },
+            {
+                "index": 2,
+                "page": 2,
+                "headers": ["Academic Session", "Autumn Semester 2026"],
+                "rows": [
+                    ["Semester Dates", "03/08/2026 to 20/11/2026"],
+                    ["Working Days", "Monday to Friday"],
+                    ["College Timings", "09:00 am to 05:00 pm"],
+                    ["Lunch Break", "1:00 pm to 2:00 pm"],
+                ],
+            },
+]
+        parsed = classify_tables(tables)
+
+        roles = {t["role"]: t for t in parsed}
+        self.assertEqual(set(roles), {"rooms", "allocations", "calendar"})
+
+        # Columns are matched by header text, not by position.
+        room_mapping = roles["rooms"]["mapping"]
+        self.assertEqual(room_mapping["room_name"], 0)
+        self.assertEqual(room_mapping["capacity"], 1)
+        self.assertEqual(room_mapping["is_lab"], 2)
+
+        alloc_mapping = roles["allocations"]["mapping"]
+        self.assertEqual(alloc_mapping["teacher"], 1)
+        self.assertEqual(alloc_mapping["subject_name"], 3)
+        self.assertEqual(alloc_mapping["year"], 0)
+        self.assertEqual(alloc_mapping["division"], 2)
+        self.assertEqual(alloc_mapping["total_hours"], 4)
+
+    def test_rejects_a_table_with_no_usable_columns(self):
+        parsed = classify_tables([
+            {"index": 0, "page": 1, "headers": ["Foo", "Bar"], "rows": [["1", "2"]]}
+        ])
+        self.assertEqual(parsed[0]["role"], "unknown")
+        self.assertEqual(parsed[0]["mapping_confidence"], 0)
+
+    def test_calendar_is_read_with_twelve_hour_and_phrase_aliases(self):
+        tables = classify_tables([
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Academic Session", "Autumn Semester 2026"],
+                "rows": [
+                    ["Semester commences on", "03 August 2026"],
+                    ["Semester concludes on", "20 November 2026"],
+                    ["Working Days", "Monday to Friday"],
+                    ["College Timings", "09:00 am to 05:00 pm"],
+                    ["Lunch Break", "1:00 pm to 2:00 pm"],
+                    ["Period Duration", "60 minutes"],
+                ],
+            },
+            {
+                "index": 1,
+                "page": 1,
+                "headers": ["Faculty Name", "Subject", "Yr", "Div", "Total Hours"],
+                "rows": [["Dr. Rao", "Data Structures", "2", "1", "4"]],
+            },
+        ])
+        payload = build_payload(tables)
+        college = payload["college"]
+
+        self.assertEqual(college["semester_name"], "Autumn Semester 2026")
+        self.assertEqual(college["start_date"], "2026-08-03")
+        self.assertEqual(college["end_date"], "2026-11-20")
+        self.assertEqual(college["working_days"], ["MON", "TUE", "WED", "THU", "FRI"])
+        self.assertEqual(college["daily_start_time"], "09:00")
+        self.assertEqual(college["daily_end_time"], "17:00")
+        self.assertEqual(college["lunch_break"], {"start_time": "13:00", "end_time": "14:00"})
+        self.assertEqual(college["period_duration_minutes"], 60)
+
+    def test_table_spanning_two_pages_is_rejoined(self):
+        tables = classify_tables([
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Faculty Name", "Subject", "Yr", "Div"],
+                "rows": [["Dr. Rao", "Data Structures", "2", "1"]],
+                "continued": True,
+            },
+            {
+                "index": 1,
+                "page": 2,
+                "headers": ["Faculty Name", "Subject", "Yr", "Div"],
+                "rows": [["Dr. Iyer", "Operating Systems", "3", "2"]],
+                "continues_table": 0,
+            },
+        ])
+        roles = {t["role"]: t for t in tables}
+        self.assertEqual(len(roles["allocations"]["rows"]), 2)
+        self.assertIn("Dr. Iyer", roles["allocations"]["rows"][1])
+
+    def test_years_and_divisions_come_from_the_allocation_grid(self):
+        """Divisions are derived from the allocation rows, which are authoritative."""
+        tables = classify_tables([
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Faculty Name", "Subject", "Yr", "Div", "Total Hours", "Strength"],
+                "rows": [
+                    ["Dr. Rao", "Data Structures", "1", "1", "4", "66"],
+                    ["Dr. Rao", "Data Structures", "1", "2", "4", "66"],
+                    ["Dr. Iyer", "Operating Systems", "2", "1", "3", "62"],
+                ],
+            },
+        ])
+        payload = build_payload(tables)
+
+        self.assertEqual(
+            payload["years"],
+            [
+                {"year": 1, "divisions": [
+                    {"division_number": 1, "strength": 66},
+                    {"division_number": 2, "strength": 66},
+                ], "strength_per_division": 66},
+                {"year": 2, "divisions": [
+                    {"division_number": 1, "strength": 62},
+                ], "strength_per_division": 62},
+            ],
+        )
+        # Allocations are grouped under the teacher they belong to.
+        by_name = {t["name"]: t for t in payload["teachers"]}
+        self.assertEqual(len(by_name["Dr. Rao"]["allocations"]), 2)
+        self.assertEqual(len(by_name["Dr. Iyer"]["allocations"]), 1)
+        self.assertEqual(len(payload["teachers"]), 2)
+
+    def test_year_outside_one_to_four_is_skipped_with_a_warning(self):
+        tables = classify_tables([
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Faculty Name", "Subject", "Yr", "Div", "Total Hours"],
+                "rows": [
+                    ["Dr. Rao", "Data Structures", "1", "1", "4"],
+                    ["Dr. Iyer", "Open Elective", "5", "1", "3"],
+                ],
+            },
+        ])
+        payload = build_payload(tables)
+
+        self.assertEqual([y["year"] for y in payload["years"]], [1])
+        self.assertTrue(
+            any("Year 5" in w for w in payload.get("_warnings", [])),
+            payload.get("_warnings"),
+        )
+
+    def test_oversized_division_strength_raises_a_capacity_warning(self):
+        tables = classify_tables([
+            {
+                "index": 0,
+                "page": 2,
+                "headers": ["Room No.", "Seat Capacity", "Room Type"],
+                "rows": [["LH-101", "70", "Classroom"], ["LAB-A", "60", "Lab"]],
+            },
+            {
+                "index": 1,
+                "page": 1,
+                "headers": ["Yr", "Faculty Name", "Div", "Subject", "Total Hours", "Nature"],
+                "rows": [["1", "Dr. Rao", "1", "Engineering Physics Lab", "2", "Lab"]],
+            },
+            {
+                "index": 2,
+                "page": 1,
+                "headers": ["Academic Session", "Autumn Semester 2026"],
+                "rows": [["Working Days", "Monday to Friday"]],
+            },
+        ])
+        payload = build_payload(tables, overrides={"default_strength": 66})
+        warnings = " ".join(payload.get("_warnings", []))
+
+        self.assertIn("66", warnings)
+        self.assertIn("lab", warnings.lower())
+
+    def test_missing_calendar_table_is_a_hard_error(self):
+        tables = classify_tables([
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Room No.", "Seat Capacity", "Room Type"],
+                "rows": [["LH-101", "70", "Classroom"]],
+            },
+        ])
+        with self.assertRaises(ValueError):
+            build_payload(tables)
+
+
+class PdfImportEndToEndTestCase(TestCase):
+    """A recognised PDF must import through the same validated path as JSON."""
+
+    @staticmethod
+    def _tables():
+        return classify_tables([
+            {
+                "index": 0,
+                "page": 1,
+                "headers": ["Academic Session", "Autumn Semester 2026"],
+                "rows": [
+                    ["Semester Dates", "03/08/2026 to 20/11/2026"],
+                    ["Working Days", "Monday to Friday"],
+                    ["College Timings", "09:00 am to 05:00 pm"],
+                    ["Lunch Break", "1:00 pm to 2:00 pm"],
+                    ["Period Duration", "60 minutes"],
+                ],
+            },
+            {
+                "index": 1,
+                "page": 2,
+                "headers": ["Room No.", "Seat Capacity", "Room Type"],
+                "rows": [["LH-101", "70", "Classroom"], ["LAB-A", "60", "Lab"]],
+            },
+            {
+                "index": 2,
+                "page": 1,
+                "headers": ["Faculty Name", "Subject", "Yr", "Div", "Total Hours",
+                            "Max hrs/week", "Nature", "Strength"],
+                "rows": [
+                    # "Total Hours" is a semester total, so 45 over a 15-week
+                    # semester is 3 periods a week.
+                    ["Dr. Meera Krishnan", "Data Structures", "1", "1", "45", "18", "Theory", "60"],
+                    ["Dr. Meera Krishnan", "Data Structures", "1", "2", "45", "18", "Theory", "60"],
+                    ["Prof. Anil Deshpande", "Operating Systems Lab", "2", "1", "45", "20", "Lab", "60"],
+                    ["Prof. Anil Deshpande", "Operating Systems Lab", "2", "2", "45", "20", "Lab", "60"],
+                ],
+            },
+        ])
+
+    @staticmethod
+    def _payload():
+        payload = build_payload(PdfImportEndToEndTestCase._tables())
+        payload["college"]["name"] = "Test Institute of Technology"
+        return payload
+
+    def test_payload_matches_the_imported_shape(self):
+        payload = self._payload()
+        self.assertEqual(payload["college"]["semester_name"], "Autumn Semester 2026")
+        self.assertEqual(payload["college"]["working_days"],
+                         ["MON", "TUE", "WED", "THU", "FRI"])
+        self.assertEqual(payload["college"]["daily_end_time"], "17:00")
+        self.assertEqual(payload["college"]["lunch_break"],
+                         {"start_time": "13:00", "end_time": "14:00"})
+        self.assertEqual(payload["rooms"]["number_of_regular_rooms"], 1)
+        self.assertEqual(payload["rooms"]["number_of_lab_rooms"], 1)
+        self.assertEqual(payload["rooms"]["lab_room_capacity"], 60)
+
+    def test_import_then_generate_produces_a_conflict_free_week(self):
+        result = import_college_data_from_dict(self._payload())
+        self.assertEqual(result["divisions_count"], 4)
+        self.assertEqual(result["rooms_count"], 2)
+        self.assertEqual(result["assignments_count"], 4)
+        self.assertEqual(result["warnings"], [])
+
+        summary = generate_timetable(result["semester"].id)
+
+        self.assertTrue(summary["success"], summary["message"])
+        self.assertEqual(
+            summary["total_hours_scheduled"], summary["total_hours_requested"]
+        )
+        self.assertEqual(summary["issues_count"], 0)
+
+        entries = TimetableEntry.objects.filter(semester=result["semester"])
+        # Four offerings at three periods a week each.
+        self.assertEqual(entries.count(), 12)
+        self.assertEqual(summary["total_hours_scheduled"], 12)
+
+        # No teacher, division or room may be double-booked: each owner may appear at
+        # most once per day-period.
+        for label, values in (
+            ("teacher", entries.values_list("assignment__teacher_id", "time_slot__day",
+                                            "time_slot_id")),
+            ("division", entries.values_list("assignment__division_id", "time_slot__day",
+                                             "time_slot_id")),
+            ("room", entries.values_list("room_id", "time_slot__day", "time_slot_id")),
+        ):
+            self.assertEqual(len(values), len(set(values)), f"{label} double-booked")
+
+        # Labs must land in labs, and every room must seat the whole division.
+        for entry in entries.select_related("room", "assignment__division",
+                                            "assignment__subject"):
+            self.assertEqual(entry.room.is_lab, entry.assignment.subject.is_lab)
+            self.assertGreaterEqual(
+                entry.room.capacity, entry.assignment.division.strength
+            )
+
+
+class PdfExportTestCase(TestCase):
+    """PDF exports must return a real, non-empty PDF for every portal."""
+
+    @classmethod
+    def setUpTestData(cls):
+        payload = PdfImportEndToEndTestCase()._payload()
+        cls.semester = import_college_data_from_dict(payload)["semester"]
+        generate_timetable(cls.semester.id)
+        cls.admin = User.objects.create_superuser(
+            username="pdfadmin", email="pdf@example.com", password="pdf-admin-pw-123"
+        )
+
+    def test_admin_can_export_every_pdf_report(self):
+        self.client.force_login(self.admin)
+        division = YearDivision.objects.first()
+        urls = [
+            f"/export/division/{division.id}.pdf?semester_id={self.semester.id}",
+            f"/export/full.pdf?semester_id={self.semester.id}",
+            f"/export/faculty.pdf?semester_id={self.semester.id}",
+            f"/export/issues.pdf?semester_id={self.semester.id}",
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], "application/pdf")
+                self.assertTrue(response.content.startswith(b"%PDF-"))
+                self.assertGreater(len(response.content), 1000)
+
+    def test_non_admin_cannot_export(self):
+        student = User.objects.create_user(username="pdfstudent", password="pdf-stu-pw-123")
+        self.client.force_login(student)
+        response = self.client.get(f"/export/full.pdf?semester_id={self.semester.id}")
+        self.assertIn(response.status_code, (302, 403))
+
+
+class PdfImportViewTestCase(TestCase):
+    """The two-stage upload screen must enforce access control and reject junk."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser(
+            username="uploader", email="up@example.com", password="upload-pw-123"
+        )
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get("/upload/pdf/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])
+
+    def test_upload_screen_renders_for_admin(self):
+        self.client.force_login(self.admin)
+        response = self.client.get("/upload/pdf/")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Import College Data from PDF")
+
+    def test_non_pdf_upload_is_rejected(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/upload/pdf/",
+            {"stage": "extract", "pdf_file": SimpleUploadedFile("data.csv", b"a,b\n1,2\n")},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid file type")
+
+    def test_pdf_without_tables_reports_a_clear_error(self):
+        self.client.force_login(self.admin)
+        pdf_bytes = _build_text_pdf("Just a plain paragraph of text with no table at all.")
+        response = self.client.post(
+            "/upload/pdf/",
+            {"stage": "extract",
+             "pdf_file": SimpleUploadedFile("blank.pdf", pdf_bytes, content_type="application/pdf")},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "No tables were found")
+
+    def test_real_pdf_is_parsed_and_offered_for_mapping(self):
+        self.client.force_login(self.admin)
+        response = self.client.post(
+            "/upload/pdf/",
+            {"stage": "extract",
+             "pdf_file": SimpleUploadedFile(
+                 "timetable.pdf", _build_sample_pdf(), content_type="application/pdf")},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Detected Tables")
+        self.assertContains(response, "Autumn Semester 2026")
+        # The recognised tables must survive the round trip through the form.
+        tables = json.loads(response.context["tables_json"])
+        self.assertEqual({t["role"] for t in tables}, {"calendar", "rooms", "allocations"})
+
+    def test_import_stage_persists_the_recognised_data(self):
+        self.client.force_login(self.admin)
+        extract = self.client.post(
+            "/upload/pdf/",
+            {"stage": "extract",
+             "pdf_file": SimpleUploadedFile(
+                 "timetable.pdf", _build_sample_pdf(), content_type="application/pdf")},
+        )
+        tables = json.loads(extract.context["tables_json"])
+        response = self.client.post(
+            "/upload/pdf/",
+            {"stage": "import", "tables_json": json.dumps(tables), "period_duration_minutes": "60"},
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(Semester.objects.count(), 1)
+        self.assertEqual(Room.objects.count(), 2)
+        self.assertEqual(Teacher.objects.count(), 2)
+
+
+def _build_text_pdf(text):
+    buffer = BytesIO()
+    canvas = Canvas(buffer)
+    canvas.setFont("Helvetica", 11)
+    text_obj = canvas.beginText(40, 780)
+    for line in text.splitlines():
+        text_obj.textLine(line)
+    canvas.drawText(text_obj)
+    canvas.save()
+    return buffer.getvalue()
+
+
+def _build_sample_pdf():
+    """A PDF shaped like a real college timetable, drawn with ruled cells."""
+    buffer = BytesIO()
+    canvas = Canvas(buffer)
+    canvas.setFont("Helvetica", 9)
+
+    def cell(x, y, w, h, text, bold=False):
+        canvas.setFont("Helvetica-Bold" if bold else "Helvetica", 9)
+        canvas.rect(x, y, w, h)
+        canvas.drawString(x + 3, y + h / 2 - 3, text[:24])
+
+    y = 760
+    canvas.setFont("Helvetica-Bold", 13)
+    canvas.drawString(40, y, "Sardar Vallabhbhai Patel Institute of Technology")
+    y -= 26
+
+    # Calendar key/value table.
+    calendar_rows = [
+        ("Academic Session", "Autumn Semester 2026"),
+        ("Semester Dates", "03/08/2026 to 20/11/2026"),
+        ("Working Days", "Monday to Friday"),
+        ("College Timings", "09:00 am to 05:00 pm"),
+        ("Lunch Break", "1:00 pm to 2:00 pm"),
+    ]
+    for left, right in calendar_rows:
+        cell(40, y, 110, 20, left, bold=True)
+        cell(150, y, 200, 20, right)
+        y -= 20
+    y -= 14
+
+    # Room table.
+    cell(40, y, 80, 20, "Room No.", bold=True)
+    cell(120, y, 80, 20, "Seat Capacity", bold=True)
+    cell(200, y, 80, 20, "Room Type", bold=True)
+    y -= 20
+    for name, capacity, kind in (("LH-101", "70", "Classroom"), ("LAB-A", "60", "Lab")):
+        cell(40, y, 80, 20, name)
+        cell(120, y, 80, 20, capacity)
+        cell(200, y, 80, 20, kind)
+        y -= 20
+    y -= 14
+
+    # Allocation table.
+    headers = ("Faculty Name", "Subject", "Yr", "Div", "Total Hours", "Nature", "Strength")
+    widths = (110, 100, 30, 30, 55, 50, 50)
+    x = 40
+    for header, width in zip(headers, widths):
+        cell(x, y, width, 20, header, bold=True)
+        x += width
+    y -= 20
+    allocation_rows = (
+        ("Dr. Meera Krishnan", "Data Structures", "1", "1", "3", "Theory", "60"),
+        ("Dr. Meera Krishnan", "Data Structures", "1", "2", "3", "Theory", "60"),
+        ("Prof. Anil Deshpande", "Operating Systems Lab", "2", "1", "3", "Lab", "60"),
+        ("Prof. Anil Deshpande", "Operating Systems Lab", "2", "2", "3", "Lab", "60"),
+    )
+    for row in allocation_rows:
+        x = 40
+        for value, width in zip(row, widths):
+            cell(x, y, width, 20, value)
+            x += width
+        y -= 20
+
+    canvas.save()
+    return buffer.getvalue()
+
+
+class CapacityReportTestCase(TestCase):
+    """The pre-solve report must name the missing infrastructure, not fail."""
+
+    @classmethod
+    def setUpTestData(cls):
+        cls.admin = User.objects.create_superuser(
+            username="capacityadmin", email="cap@example.com", password="capacity-pw-123"
+        )
+
+    def test_anonymous_user_is_redirected_to_login(self):
+        response = self.client.get("/capacity/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response["Location"])
+
+    def test_empty_college_reports_no_data_rather_than_crashing(self):
+        self.client.force_login(self.admin)
+        response = self.client.get("/capacity/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.context["plan"])
+
+    def test_oversized_division_is_reported_as_blocking(self):
+        # One 70-student division but the only laboratory seats 30.
+        payload = build_payload(PdfImportEndToEndTestCase._tables())
+        payload["college"]["name"] = "Capacity Institute"
+        payload["rooms"]["lab_room_capacity"] = 30
+        payload["rooms"]["number_of_lab_rooms"] = 1
+        semester = import_college_data_from_dict(payload)["semester"]
+
+        plan = analyse_capacity(semester)
+
+        self.assertEqual(plan["verdict"], "unschedulable")
+        self.assertTrue(plan["blocking_findings"])
+        self.assertTrue(
+            any("laborator" in f["message"].lower() for f in plan["blocking_findings"]),
+            plan["blocking_findings"],
+        )
+
+        self.client.force_login(self.admin)
+        response = self.client.get(f"/capacity/?semester_id={semester.id}")
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "cannot be fully scheduled")
+        self.assertContains(response, "Division Strength Coverage")
+
+    def test_adequate_infrastructure_is_reported_as_schedulable(self):
+        semester = import_college_data_from_dict(
+            PdfImportEndToEndTestCase._payload()
+        )["semester"]
+
+        plan = analyse_capacity(semester)
+
+        self.assertEqual(plan["verdict"], "schedulable")
+        self.assertEqual(plan["blocking_findings"], [])
+        self.assertEqual(plan["division_count"], 4)
+
+
+class RegressionsFoundInFullAuditTestCase(TestCase):
+    """
+    Defects found by walking every page and form in the application by hand.
+
+    Each test names the symptom that was observed so a future change cannot
+    quietly reintroduce it.
+    """
+
+    def setUp(self):
+        self.admin = User.objects.create_superuser(
+            "audit_admin", "audit@test.com", "password123"
+        )
+        self.client.force_login(self.admin)
+        self.semester = import_college_data_from_dict(
+            PdfImportEndToEndTestCase._payload()
+        )["semester"]
+
+    # ---------------------------------------------------------------- portal
+    def test_admin_without_a_profile_is_sent_home_from_my_timetable(self):
+        """A notification links here, so an admin must not hit a 500."""
+        response = self.client.get("/my-timetable/")
+        self.assertRedirects(response, "/")
+
+    def test_proposal_survives_the_resolve_that_its_own_approval_triggers(self):
+        """
+        Approving a fix re-runs the solver, which recreates SchedulingIssue rows.
+        A CASCADE there deleted the proposal mid-approval and the final save
+        failed with "Save with update_fields did not affect any rows".
+        """
+        proposal = ProposedChange(
+            semester=self.semester,
+            kind="ADD_ROOM",
+            title="Add a room",
+            rationale="Extra capacity",
+            payload={"name": "Audit Lab", "capacity": 60, "is_lab": True},
+        )
+        proposal.save()
+
+        # What the solver does at the start of every run.
+        SchedulingIssue.objects.filter(semester=self.semester).delete()
+
+        refreshed = ProposedChange.objects.get(pk=proposal.pk)
+        self.assertIsNotNone(refreshed)
+        refreshed.status = "APPROVED"
+        refreshed.save(update_fields=["status"])
+
+    # ----------------------------------------------------------- preferences
+    def test_applying_preferences_updates_the_stored_row_instead_of_inserting(self):
+        """A second row for the same semester broke the unique constraint."""
+        url = f"/preferences/?semester_id={self.semester.id}"
+        payload = {
+            "working_days": ["MONDAY", "TUESDAY", "WEDNESDAY"],
+            "day_start_time": "09:00",
+            "day_end_time": "14:00",
+            "period_duration_minutes": "60",
+            "lunch_start_time": "12:00",
+            "lunch_end_time": "13:00",
+            "action": "apply",
+            "force": "on",
+        }
+        response = self.client.post(url, payload)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            SchedulingPreference.objects.filter(semester=self.semester).count(), 1
+        )
+
+    def test_changing_the_week_shape_retimes_the_existing_periods(self):
+        """
+        generate_time_slots used get_or_create, so an existing period kept its
+        old start/end time and the published grid disagreed with the preference.
+        """
+        generate_time_slots(
+            ["MONDAY"], time(9, 0), time(17, 0), 60,
+            (time(13, 0), time(14, 0)),
+        )
+        slot = TimeSlot.objects.get(day="MON", period_number=1)
+        self.assertEqual((slot.start_time, slot.end_time), (time(9, 0), time(10, 0)))
+
+        generate_time_slots(
+            ["MONDAY"], time(11, 0), time(17, 0), 45,
+            (time(13, 0), time(14, 0)),
+        )
+        slot.refresh_from_db()
+        self.assertEqual((slot.start_time, slot.end_time), (time(11, 0), time(11, 45)))
+
+    def test_blank_time_field_is_a_form_error_not_a_server_error(self):
+        """Clearing a time field used to raise ValueError and return HTTP 500."""
+        response = self.client.post(
+            f"/preferences/?semester_id={self.semester.id}",
+            {
+                "working_days": ["MONDAY"],
+                "day_start_time": "",
+                "day_end_time": "",
+                "period_duration_minutes": "60",
+                "lunch_start_time": "",
+                "lunch_end_time": "",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "must be a time such as")
+
+    def test_blank_period_length_is_a_form_error_not_a_server_error(self):
+        response = self.client.post(
+            f"/preferences/?semester_id={self.semester.id}",
+            {
+                "working_days": ["MONDAY"],
+                "day_start_time": "09:00",
+                "day_end_time": "14:00",
+                "period_duration_minutes": "",
+                "lunch_start_time": "12:00",
+                "lunch_end_time": "13:00",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "whole number of minutes")
+
+    # ------------------------------------------------------------ suggestions
+    def _force_three_issues_that_share_one_remedy(self):
+        """
+        Three lab divisions that are all too big for the only lab produce the
+        same "add a room" suggestion, which used to be proposed three times.
+        """
+        room = Room.objects.filter(is_lab=True).order_by("pk").first()
+        room.capacity = 5
+        room.save(update_fields=["capacity"])
+
+        SchedulingIssue.objects.filter(semester=self.semester).delete()
+        lab_assignments = list(
+            Assignment.objects.filter(
+                semester=self.semester, subject__is_lab=True
+            )
+        )[:3]
+        self.assertGreaterEqual(len(lab_assignments), 2)
+        for assignment in lab_assignments:
+            assignment.division.strength = 300
+            assignment.division.save(update_fields=["strength"])
+            SchedulingIssue.objects.create(
+                semester=self.semester,
+                assignment=assignment,
+                hours_requested=2,
+                hours_scheduled=0,
+                reason=f"{assignment.subject.name} cannot be seated.",
+                suggestion="Add a larger laboratory.",
+            )
+        return lab_assignments
+
+    def test_identical_remedies_are_proposed_only_once(self):
+        """One undersized room produced one proposal per affected issue."""
+        self._force_three_issues_that_share_one_remedy()
+
+        proposals = recommend_for_semester(self.semester)
+        self.assertTrue(proposals)
+
+        signatures = [(p.kind, p.title) for p in proposals]
+        self.assertEqual(len(set(signatures)), len(signatures))
+
+    def test_one_approval_clears_every_issue_that_shared_the_remedy(self):
+        self._force_three_issues_that_share_one_remedy()
+
+        proposals = recommend_for_semester(self.semester)
+        self.assertEqual(len(proposals), 1)
+
+    def test_recommending_twice_does_not_duplicate_pending_proposals(self):
+        self._force_three_issues_that_share_one_remedy()
+
+        recommend_for_semester(self.semester)
+        before = ProposedChange.objects.filter(
+            semester=self.semester, status="PENDING"
+        ).count()
+        recommend_for_semester(self.semester)
+        after = ProposedChange.objects.filter(
+            semester=self.semester, status="PENDING"
+        ).count()
+        self.assertEqual(before, after)

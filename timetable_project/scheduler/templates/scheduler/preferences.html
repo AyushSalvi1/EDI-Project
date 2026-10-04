@@ -1,0 +1,233 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Timetable Preferences | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <div class="card p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+        <i class="fa-solid fa-sliders text-indigo-600"></i> Timetable Preferences
+      </h1>
+      <p class="text-xs sm:text-sm text-slate-500 mt-1">
+        Set the working week, college timings and period length. Changes are checked
+        against real demand before anything is applied.
+      </p>
+    </div>
+    <form method="GET" class="flex items-center gap-2">
+      <select name="semester_id" onchange="this.form.submit()"
+              class="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        {% for s in semesters %}
+        <option value="{{ s.id }}" {% if selected_semester and s.id == selected_semester.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
+  </div>
+
+  {% if not selected_semester %}
+    <div class="card p-8 text-center">
+      <i class="fa-solid fa-inbox text-3xl text-slate-300"></i>
+      <p class="text-sm text-slate-500 mt-3">No semester data yet.</p>
+      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary mt-4">
+        <i class="fa-solid fa-file-pdf"></i> Import College Data
+      </a>
+    </div>
+  {% else %}
+
+  <form method="POST" class="grid lg:grid-cols-3 gap-5 items-start" id="prefs-form">
+    {% csrf_token %}
+    <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+
+    <!-- Week shape -->
+    <div class="card p-4 sm:p-6 lg:col-span-2 space-y-5">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide">College Week</h2>
+
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-2">Working Days</label>
+        <div class="flex flex-wrap gap-2">
+          {% for key, label in day_choices %}
+          <label class="cursor-pointer">
+            <input type="checkbox" name="working_days" value="{{ key }}"
+                   {% if key in preference.day_list %}checked{% endif %}
+                   class="peer sr-only js-day">
+            <span class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-500 transition
+                         peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:text-indigo-700
+                         hover:border-slate-300 cursor-pointer">
+              {{ label|slice:":3" }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="text-[11px] text-slate-400 mt-2">
+          A whole extra working day is usually the cheapest way to create missing teaching time.
+        </p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">College Starts</label>
+          <input type="time" name="day_start_time" required
+                 value="{{ preference.day_start_time|time:'H:i' }}"
+                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">College Ends</label>
+          <input type="time" name="day_end_time" required
+                 value="{{ preference.day_end_time|time:'H:i' }}"
+                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Lunch Starts</label>
+          <input type="time" name="lunch_start_time" required
+                 value="{{ preference.lunch_start_time|time:'H:i' }}"
+                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Lunch Ends</label>
+          <input type="time" name="lunch_end_time" required
+                 value="{{ preference.lunch_end_time|time:'H:i' }}"
+                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <div>
+          <select name="period_duration_minutes"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <option value="45" {% if preference.period_duration_minutes == 45 %}selected{% endif %}>45</option>
+            <option value="50" {% if preference.period_duration_minutes == 50 %}selected{% endif %}>50</option>
+            <option value="60" {% if preference.period_duration_minutes == 60 %}selected{% endif %}>60</option>
+            <option value="75" {% if preference.period_duration_minutes == 75 %}selected{% endif %}>75</option>
+            <option value="90" {% if preference.period_duration_minutes == 90 %}selected{% endif %}>90</option>
+          </select>
+        </div>
+      </div>
+
+      {% if week.first_slot %}
+      <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+        <p class="text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">Current Grid</p>
+        <p class="text-[11px] text-slate-600">
+          {{ week.periods_per_day }} periods a day &bull; {{ week.slots_per_week }} slots a week
+          &bull; {{ week.first_slot.start_time|time:'H:i' }}&ndash;{{ week.last_slot.end_time|time:'H:i' }}
+          (lunch excluded)
+        </p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Analysis -->
+    <div class="space-y-4">
+      {% if analysis %}
+      <div class="card p-4 sm:p-5">
+        <div class="flex items-center gap-3">
+          <span class="w-10 h-10 rounded-xl grid place-items-center text-white shrink-0
+            {% if analysis.feasible %}bg-emerald-500{% else %}bg-rose-500{% endif %}">
+            <i class="fa-solid {% if analysis.feasible %}fa-circle-check{% else %}fa-triangle-exclamation{% endif %}"></i>
+          </span>
+          <div>
+            <p class="text-sm font-extrabold text-slate-900">
+              {% if analysis.feasible %}This week works{% else %}This week does not work{% endif %}
+            </p>
+            <p class="text-[11px] text-slate-500">
+              {{ analysis.summary.periods_per_day }} periods &bull; {{ analysis.summary.slots_per_week }} slots per week
+            </p>
+          </div>
+        </div>
+
+        <div class="mt-3 space-y-2">
+          {% for finding in analysis.findings %}
+          <div class="p-2.5 rounded-lg text-[11px] leading-relaxed border
+            {% if finding.severity == 'blocking' %}bg-rose-50 border-rose-200 text-rose-900
+            {% elif finding.severity == 'warning' %}bg-amber-50 border-amber-200 text-amber-900
+            {% else %}bg-sky-50 border-sky-200 text-sky-900{% endif %}">
+            <i class="fa-solid mr-1
+              {% if finding.severity == 'blocking' %}fa-circle-xmark
+              {% elif finding.severity == 'warning' %}fa-triangle-exclamation
+              {% else %}fa-circle-info{% endif %}"></i>{{ finding.message }}
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      {% if analysis and not analysis.feasible %}
+      <label class="card p-3.5 flex gap-2.5 cursor-pointer border-amber-300 bg-amber-50">
+        <input type="checkbox" name="force" value="1" class="mt-0.5 accent-rose-600">
+        <span class="text-[11px] text-amber-900 leading-relaxed">
+          <strong>Apply anyway.</strong> Tick this if you understand the consequences and
+          want to proceed despite the problems listed.
+        </span>
+      </label>
+      {% endif %}
+
+      <div class="space-y-2.5 pt-2">
+        <button type="submit" name="action" value="apply" class="btn-primary w-full justify-center"
+                data-loading="Applying&hellip;"
+                data-confirm="Apply these preferences? This rebuilds the period grid, re-generates the timetable, and notifies every affected student and teacher.">
+          <i class="fa-solid fa-check"></i> Apply Preferences
+        </button>
+        <button type="submit" name="action" value="check" class="btn-ghost w-full justify-center">
+          <i class="fa-solid fa-magnifying-glass"></i> Check Without Applying
+        </button>
+        <p class="text-[10px] text-slate-400 leading-relaxed">
+          Applying rebuilds the period grid and re-generates the timetable. Every
+          affected student and teacher is notified about their own changes.
+        </p>
+      </div>
+    </div>
+  </form>
+
+  <!-- Per-division preferences -->
+  <div class="card p-4 sm:p-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-1">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide">Per-Division Slots</h2>
+      <span class="text-[10px] text-slate-400">
+        {{ division_preferences|length }} division(s) with their own preference
+      </span>
+    </div>
+    <p class="text-xs text-slate-500 mb-4">
+      Restrict one division to specific days or a period range. Everyone else is unaffected.
+    </p>
+
+    {% if division_preferences %}
+    <div class="space-y-2 mb-4">
+      {% for pref in division_preferences %}
+      <div class="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
+        <div class="min-w-0">
+          <p class="text-xs font-bold text-slate-800">{{ pref.division.name }}</p>
+          <p class="text-[10px] text-slate-500">
+            {% if pref.working_days %}
+              Days: {% for d in pref.day_list %}{{ d }}{% if not forloop.last %}, {% endif %}{% endfor %} &bull;
+            {% else %}All working days &bull; {% endif %}
+            Periods {{ pref.first_period }}{% if pref.last_period %}&ndash;{{ pref.last_period }}{% endif %}
+            {% if pref.note %}&bull; {{ pref.note }}{% endif %}
+          </p>
+        </div>
+        <div class="flex gap-2">
+          <a href="{% url 'scheduler:division_preference' pref.division_id %}?semester_id={{ selected_semester.id }}"
+             class="btn-ghost !text-[11px] !py-1.5"><i class="fa-solid fa-pen"></i> Edit</a>
+          <form method="POST" action="{% url 'scheduler:division_preference' pref.division_id %}" class="js-confirm"
+                data-confirm="Remove {{ pref.division.name }}'s own preference? It will follow the college-wide timetable again.">
+            {% csrf_token %}
+            <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+            <input type="hidden" name="action" value="clear">
+            <button class="btn-ghost !text-[11px] !py-1.5 !text-rose-600"><i class="fa-solid fa-trash"></i> Remove</button>
+          </form>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="flex flex-wrap gap-2">
+      {% for division in divisions %}
+      <a href="{% url 'scheduler:division_preference' division.id %}?semester_id={{ selected_semester.id }}"
+         class="btn-ghost !text-[11px] !py-2">
+        <i class="fa-solid fa-plus"></i> {{ division.name }}
+      </a>
+      {% empty %}
+      <p class="text-xs text-slate-400">No divisions in this semester yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

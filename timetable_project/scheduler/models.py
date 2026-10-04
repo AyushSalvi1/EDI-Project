@@ -2,6 +2,7 @@ import math
 from datetime import time
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 
 
@@ -190,39 +191,82 @@ def _minutes_to_time(m: int) -> time:
 def generate_time_slots(working_days, daily_start_time, daily_end_time,
                         period_duration_minutes, lunch_break):
     """
-    Helper function that auto-creates all TimeSlot rows by dividing the daily
-    start-end range into equal periods, for each working day.
-    The lunch_break window (start_time, end_time) is completely excluded -- no
-    period is generated that overlaps it at all. Periods are numbered sequentially
-    across the whole day, skipping over the lunch gap.
-    """
-    start_t = _parse_time(daily_start_time)
-    end_t = _parse_time(daily_end_time)
-    start_mins = _time_to_minutes(start_t)
-    end_mins = _time_to_minutes(end_t)
+    Create all TimeSlot rows implied by a working week.
 
-    lunch_start_mins = None
-    lunch_end_mins = None
-    if lunch_break:
-        lunch_s = _parse_time(lunch_break.get('start_time'))
-        lunch_e = _parse_time(lunch_break.get('end_time'))
-        lunch_start_mins = _time_to_minutes(lunch_s)
-        lunch_end_mins = _time_to_minutes(lunch_e)
+    Delegates the arithmetic to `plan_time_slots`, which is pure, and only then
+    writes. Anything that needs to *preview* a week must use the planner
+    directly, because this function has database side effects.
+    """
+    lunch_break = _normalise_lunch(lunch_break)
 
     created_slots = []
+    for day_key, period_number, start_time, end_time in plan_time_slots(
+        working_days, daily_start_time, daily_end_time,
+        period_duration_minutes, lunch_break,
+    ):
+        slot, created = TimeSlot.objects.get_or_create(
+            day=day_key,
+            period_number=period_number,
+            defaults={'start_time': start_time, 'end_time': end_time},
+        )
+        if not created and (slot.start_time != start_time
+                            or slot.end_time != end_time):
+            # The week shape changed. get_or_create leaves an existing row
+            # untouched, which would silently keep the old timings and publish a
+            # grid that disagrees with the preference that produced it.
+            slot.start_time = start_time
+            slot.end_time = end_time
+            slot.save(update_fields=["start_time", "end_time"])
+        created_slots.append(slot)
+    return created_slots
 
-    # Map full day names or abbreviations to choices key
-    day_map = {
-        'MON': 'MON', 'MONDAY': 'MON',
-        'TUE': 'TUE', 'TUESDAY': 'TUE',
-        'WED': 'WED', 'WEDNESDAY': 'WED',
-        'THU': 'THU', 'THURSDAY': 'THU',
-        'FRI': 'FRI', 'FRIDAY': 'FRI',
-        'SAT': 'SAT', 'SATURDAY': 'SAT',
-    }
 
+def _normalise_lunch(lunch_break):
+    """Accept a dict, a pair, or None and return the canonical dict form."""
+    if not lunch_break:
+        return None
+    if isinstance(lunch_break, dict):
+        return {
+            'start_time': lunch_break.get('start_time'),
+            'end_time': lunch_break.get('end_time'),
+        }
+    start, end = lunch_break
+    return {'start_time': start, 'end_time': end}
+
+
+DAY_KEY_MAP = {
+    'MON': 'MON', 'MONDAY': 'MON',
+    'TUE': 'TUE', 'TUESDAY': 'TUE',
+    'WED': 'WED', 'WEDNESDAY': 'WED',
+    'THU': 'THU', 'THURSDAY': 'THU',
+    'FRI': 'FRI', 'FRIDAY': 'FRI',
+    'SAT': 'SAT', 'SATURDAY': 'SAT',
+}
+
+
+def plan_time_slots(working_days, daily_start_time, daily_end_time,
+                    period_duration_minutes, lunch_break=None):
+    """
+    Work out which periods a working week would contain, without writing.
+
+    Returns a list of ``(day, period_number, start_time, end_time)`` tuples. The
+    lunch window is excluded completely: no period overlapping it is ever
+    produced. Periods are numbered continuously across the day, skipping the
+    lunch gap.
+    """
+    lunch_break = _normalise_lunch(lunch_break)
+
+    start_mins = _time_to_minutes(_parse_time(daily_start_time))
+    end_mins = _time_to_minutes(_parse_time(daily_end_time))
+
+    lunch_start_mins = lunch_end_mins = None
+    if lunch_break:
+        lunch_start_mins = _time_to_minutes(_parse_time(lunch_break['start_time']))
+        lunch_end_mins = _time_to_minutes(_parse_time(lunch_break['end_time']))
+
+    plan = []
     for raw_day in working_days:
-        day_key = day_map.get(raw_day.upper().strip())
+        day_key = DAY_KEY_MAP.get(str(raw_day).upper().strip())
         if not day_key:
             continue
 
@@ -233,34 +277,26 @@ def generate_time_slots(working_days, daily_start_time, daily_end_time,
             p_start = curr
             p_end = curr + period_duration_minutes
 
-            # Check if this period overlaps the lunch window
             if lunch_start_mins is not None and lunch_end_mins is not None:
                 # Overlap condition: max(start1, start2) < min(end1, end2)
                 if max(p_start, lunch_start_mins) < min(p_end, lunch_end_mins):
-                    # Overlaps lunch. Skip forward to lunch_end
+                    # Overlaps lunch: skip forward to the end of the break.
                     if curr < lunch_end_mins:
                         curr = lunch_end_mins
                     else:
                         curr += period_duration_minutes
                     continue
 
-            # Non-overlapping period
-            slot_start_time = _minutes_to_time(p_start)
-            slot_end_time = _minutes_to_time(p_end)
-
-            slot, created = TimeSlot.objects.get_or_create(
-                day=day_key,
-                period_number=period_num,
-                defaults={
-                    'start_time': slot_start_time,
-                    'end_time': slot_end_time,
-                }
-            )
-            created_slots.append(slot)
+            plan.append((
+                day_key,
+                period_num,
+                _minutes_to_time(p_start),
+                _minutes_to_time(p_end),
+            ))
             period_num += 1
             curr = p_end
 
-    return created_slots
+    return plan
 
 
 # ===========================================================================
@@ -432,3 +468,259 @@ class SolverRun(models.Model):
 
     def __str__(self):
         return f"{self.semester.name} solver run at {self.created_at} ({self.solver_status})"
+
+
+# ===========================================================================
+# 14. SchedulingPreference (administrator-controlled week shape)
+# ===========================================================================
+class SchedulingPreference(models.Model):
+    """
+    The week shape an administrator wants, which the solver honours.
+
+    This exists so the admin does not have to re-import college data to change
+    working days or period times. Applying a preference regenerates TimeSlot
+    rows, so it is deliberately kept separate from the importer.
+    """
+
+    semester = models.OneToOneField(
+        Semester, on_delete=models.CASCADE, related_name='preference'
+    )
+    working_days = models.CharField(
+        max_length=30, default='MON,TUE,WED,THU,FRI',
+        help_text='Comma separated working days.',
+    )
+    day_start_time = models.TimeField(default=time(9, 0))
+    day_end_time = models.TimeField(default=time(17, 0))
+    period_duration_minutes = models.PositiveIntegerField(default=60)
+    lunch_start_time = models.TimeField(default=time(13, 0))
+    lunch_end_time = models.TimeField(default=time(14, 0))
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='preference_changes',
+    )
+
+    class Meta:
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.semester.name} preference ({self.working_days})"
+
+    def day_list(self):
+        """Validated list of day keys, ordered MON..SAT with unknown values dropped."""
+        keys = [d.strip().upper()[:3] for d in self.working_days.split(',') if d.strip()]
+        valid = [d for d in DAY_ORDER if d in keys]
+        return valid
+
+    def period_count(self):
+        """Number of periods a day yields, excluding the lunch window."""
+        return len(
+            plan_time_slots(
+                self.day_list(), self.day_start_time, self.day_end_time,
+                self.period_duration_minutes,
+                (self.lunch_start_time, self.lunch_end_time),
+            )
+        ) // max(1, len(self.day_list()))
+
+    def validate(self):
+        """Raise ValidationError if the preference cannot produce a usable week."""
+        if not self.day_list():
+            raise ValidationError("Select at least one working day.")
+        if self.period_duration_minutes < 15:
+            raise ValidationError("Periods must be at least 15 minutes long.")
+        if _time_to_minutes(self.day_end_time) <= _time_to_minutes(self.day_start_time):
+            raise ValidationError("The college day must end after it starts.")
+        if (_time_to_minutes(self.lunch_start_time) < _time_to_minutes(self.day_start_time)
+                or _time_to_minutes(self.lunch_end_time) > _time_to_minutes(self.day_end_time)):
+            raise ValidationError("The lunch break must fall inside the college day.")
+        if _time_to_minutes(self.lunch_end_time) <= _time_to_minutes(self.lunch_start_time):
+            raise ValidationError("Lunch must end after it starts.")
+
+        # plan_time_slots is pure, so this check cannot create any rows.
+        if not plan_time_slots(
+            self.day_list(), self.day_start_time, self.day_end_time,
+            self.period_duration_minutes,
+            (self.lunch_start_time, self.lunch_end_time),
+        ):
+            raise ValidationError(
+                "These settings leave no teaching periods. Shorten the lunch break "
+                "or lengthen the college day."
+            )
+
+
+class DivisionPreference(models.Model):
+    """
+    An optional per-division override of the college week.
+
+    Lets an administrator say "2nd Year - Division 1 works Monday to Wednesday and
+    uses periods 1 to 4" without changing anyone else's timetable.
+    """
+
+    division = models.OneToOneField(
+        YearDivision, on_delete=models.CASCADE, related_name='preference'
+    )
+    working_days = models.CharField(max_length=30, blank=True)
+    first_period = models.PositiveIntegerField(default=1)
+    last_period = models.PositiveIntegerField(default=0, help_text='0 means no limit.')
+    note = models.CharField(max_length=200, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['division__year', 'division__division_number']
+
+    def __str__(self):
+        return f"Preference for {self.division.name}"
+
+    def day_list(self):
+        keys = [d.strip().upper()[:3] for d in self.working_days.split(',') if d.strip()]
+        return [d for d in DAY_ORDER if d in keys]
+
+    def allowed_slots(self, slots=None):
+        """Slots this division is permitted to use, given its own preference."""
+        slots = TimeSlot.objects.all() if slots is None else slots
+        days = self.day_list()
+        result = []
+        for slot in slots:
+            if days and slot.day not in days:
+                continue
+            if self.first_period and slot.period_number < self.first_period:
+                continue
+            if self.last_period and slot.period_number > self.last_period:
+                continue
+            result.append(slot)
+        return result
+
+
+# ===========================================================================
+# 15. ProposedChange (recommendation awaiting administrator approval)
+# ===========================================================================
+class ProposedChange(models.Model):
+    """
+    A concrete, reviewable remedy for a scheduling problem.
+
+    Nothing here is applied automatically. The recommendation engine creates
+    proposals; only an administrator approving one changes the database, and the
+    change is then verified by re-solving and notifying everyone affected.
+    """
+
+    KIND_CHOICES = [
+        ('ADD_ROOM', 'Add a room'),
+        ('RAISE_TEACHER_LIMIT', 'Raise a teacher\'s weekly limit'),
+        ('REASSIGN_TEACHER', 'Reassign a subject to another teacher'),
+        ('REDUCE_HOURS', 'Reduce weekly hours'),
+        ('APPLY_PREFERENCES', 'Apply timetable preferences'),
+        ('RELAX_UNAVAILABILITY', 'Relax teacher unavailability'),
+    ]
+    STATUS_CHOICES = [
+        ('PENDING', 'Awaiting review'),
+        ('APPROVED', 'Approved'),
+        ('APPLIED', 'Applied and verified'),
+        ('REJECTED', 'Rejected'),
+        ('FAILED', 'Applied but did not help'),
+    ]
+
+    semester = models.ForeignKey(
+        Semester, on_delete=models.CASCADE, related_name='proposals'
+    )
+    issue = models.ForeignKey(
+        # SET_NULL, not CASCADE: re-solving deletes and recreates SchedulingIssue
+        # rows, and a pending proposal must survive that so it can still be
+        # approved. A detached proposal simply loses its link.
+        SchedulingIssue, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='proposals',
+    )
+    kind = models.CharField(max_length=32, choices=KIND_CHOICES)
+    title = models.CharField(max_length=200)
+    rationale = models.TextField(
+        help_text='Why the engine believes this will resolve the problem.'
+    )
+    expected_effect = models.CharField(max_length=300, blank=True)
+    payload = models.JSONField(default=dict)
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='PENDING')
+    verified_gain_hours = models.IntegerField(
+        default=0, blank=True, null=True,
+        help_text='Hours recovered when the remedy was trialled in a sandbox.',
+    )
+    result_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='reviewed_proposals',
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"[{self.status}] {self.title}"
+
+    @property
+    def is_actionable(self):
+        return self.status == 'PENDING'
+
+    def affected_people(self):
+        """Human readable description of who this change touches."""
+        payload = self.payload or {}
+        if self.kind == 'ADD_ROOM':
+            return 'All divisions needing a larger room'
+        if self.kind == 'RAISE_TEACHER_LIMIT':
+            return payload.get('teacher_name', 'the teacher')
+        if self.kind == 'REASSIGN_TEACHER':
+            return payload.get('previous_teacher', 'the teacher')
+        if self.kind == 'REDUCE_HOURS':
+            return payload.get('division_name', 'the division')
+        if self.kind == 'RELAX_UNAVAILABILITY':
+            return payload.get('teacher_name', 'the teacher')
+        if self.kind == 'APPLY_PREFERENCES':
+            return 'Everyone, if slots are regenerated'
+        return ''
+
+
+# ===========================================================================
+# 16. Notification (inbox for admins, teachers and students)
+# ===========================================================================
+class Notification(models.Model):
+    """
+    An in-app message. Administrators are told about scheduling problems;
+    teachers and students are told when their own timetable changes.
+    """
+
+    KIND_CHOICES = [
+        ('ISSUE', 'Scheduling issue found'),
+        ('PROPOSAL', 'A fix is awaiting your approval'),
+        ('TIMETABLE_CHANGED', 'Your timetable changed'),
+        ('RESOLVED', 'A problem was resolved'),
+        ('SYSTEM', 'System message'),
+    ]
+    SEVERITY_CHOICES = [
+        ('info', 'Information'),
+        ('warning', 'Warning'),
+        ('critical', 'Needs attention'),
+        ('success', 'Good news'),
+    ]
+
+    recipient = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications'
+    )
+    kind = models.CharField(max_length=24, choices=KIND_CHOICES, default='SYSTEM')
+    severity = models.CharField(max_length=10, choices=SEVERITY_CHOICES, default='info')
+    title = models.CharField(max_length=200)
+    body = models.TextField(blank=True)
+    url = models.CharField(max_length=200, blank=True)
+    semester = models.ForeignKey(
+        Semester, null=True, blank=True, on_delete=models.CASCADE, related_name='notifications'
+    )
+    proposal = models.ForeignKey(
+        ProposedChange, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name='notifications',
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['recipient', 'is_read', '-created_at'])]
+
+    def __str__(self):
+        return f"{self.title} -> {self.recipient.username}"

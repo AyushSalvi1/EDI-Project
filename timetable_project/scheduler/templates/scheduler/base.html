@@ -19,6 +19,25 @@
     .btn-primary { @apply px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow transition duration-150 inline-flex items-center gap-2; }
     .btn-secondary { @apply px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow transition duration-150 inline-flex items-center gap-2; }
     .btn-ghost   { @apply px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm transition inline-flex items-center gap-2; }
+
+    /* Keep the interface feeling instant: never let a tap register as a miss. */
+    a, button, input, select, label { -webkit-tap-highlight-color: transparent; }
+    button:disabled { @apply opacity-60 cursor-not-allowed; }
+
+    /* Respect the OS setting so the interface does not flash for motion-sensitive users. */
+    @media (prefers-reduced-motion: reduce) {
+      * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+
+    /* Visible keyboard focus, which the CDN reset removes by default. */
+    :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: 6px; }
+
+    /* Native confirmation, matched to the design, so nothing needs a dialog library. */
+    dialog.js-confirm-dialog {
+      @apply rounded-2xl border-0 p-0 shadow-2xl max-w-md w-[calc(100%-2rem)];
+      font-family: inherit;
+    }
+    dialog.js-confirm-dialog::backdrop { background: rgba(15, 23, 42, 0.55); }
   </style>
 </head>
 <body class="bg-slate-50 min-h-screen flex flex-col text-slate-900 antialiased">
@@ -45,20 +64,32 @@
           <a href="{% url 'scheduler:home' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'home' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
             <i class="fa-solid fa-gauge-high"></i><span class="hidden sm:inline">Dashboard</span>
           </a>
-          <a href="{% url 'scheduler:upload_json' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'upload_json' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-            <i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Upload JSON</span>
+          <a href="{% url 'scheduler:issue_centre' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 relative {% if url_name == 'issue_centre' or url_name == 'proposal_list' or url_name == 'find_fixes' or url_name == 'approve_proposal' or url_name == 'reject_proposal' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+             title="Scheduling issues and suggested fixes">
+            <i class="fa-solid fa-triangle-exclamation"></i><span class="hidden lg:inline">Issues</span>
+            {% if unread_count %}
+            <span class="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">{{ unread_count }}</span>
+            {% endif %}
+          </a>
+          <a href="{% url 'scheduler:preferences' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'preferences' or url_name == 'division_preference' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+             title="Working days, timings and per-division slots">
+            <i class="fa-solid fa-sliders"></i><span class="hidden xl:inline">Preferences</span>
+          </a>
+          <a href="{% url 'scheduler:upload_pdf' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'upload_pdf' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid fa-file-import"></i><span class="hidden xl:inline">Import</span>
           </a>
           <a href="{% url 'scheduler:generate_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'generate_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
             <i class="fa-solid fa-wand-magic-sparkles"></i><span class="hidden sm:inline">Generate</span>
           </a>
           <a href="{% url 'scheduler:timetable_view' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'timetable_view' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-            <i class="fa-solid fa-table-cells"></i><span class="hidden lg:inline">All Divisions</span>
+            <i class="fa-solid fa-table-cells"></i><span class="hidden lg:inline">Timetables</span>
           </a>
           <a href="{% url 'scheduler:manage_entries' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'manage_entries' or url_name == 'move_entry' or url_name == 'delete_entry' or url_name == 'swap_entries' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-            <i class="fa-solid fa-screwdriver-wrench"></i><span class="hidden lg:inline">Manage</span>
+            <i class="fa-solid fa-screwdriver-wrench"></i><span class="hidden xl:inline">Manage</span>
           </a>
-          <a href="/admin/" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 transition flex items-center gap-1.5">
-            <i class="fa-solid fa-sliders"></i><span class="hidden xl:inline">Django Admin</span>
+          <a href="/admin/" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 transition flex items-center gap-1.5"
+             title="Django admin">
+            <i class="fa-solid fa-sliders"></i>
           </a>
         {% else %}
           <a href="{% url 'scheduler:my_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'my_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
@@ -69,6 +100,13 @@
 
       {% if user.is_authenticated %}
         <div class="flex items-center gap-2 ml-2 pl-3 border-l border-slate-700">
+          <a href="{% url 'scheduler:notifications' %}" title="Notifications"
+             class="relative px-2.5 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center">
+            <i class="fa-solid fa-bell"></i>
+            {% if notifications_unread %}
+            <span class="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">{{ notifications_unread }}</span>
+            {% endif %}
+          </a>
           <div class="hidden md:block text-right leading-tight">
             <span class="block text-[11px] font-bold text-white truncate max-w-[130px]">
               {% if user.teacher_profile %}{{ user.teacher_profile.name }}
@@ -130,5 +168,82 @@
 </footer>
 
 {% block scripts %}{% endblock %}
+
+<script>
+// One confirmation dialog, reused for every destructive action.
+(function () {
+  var dialog = document.createElement('dialog');
+  dialog.className = 'js-confirm-dialog';
+  dialog.innerHTML =
+    '<div class="p-5">' +
+      '<div class="flex items-start gap-3">' +
+        '<span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 grid place-items-center shrink-0">' +
+          '<i class="fa-solid fa-triangle-exclamation"></i>' +
+        '</span>' +
+        '<div class="min-w-0">' +
+          '<h3 class="text-sm font-extrabold text-slate-900">Are you sure?</h3>' +
+          '<p class="text-xs text-slate-600 mt-1 leading-relaxed js-confirm-message"></p>' +
+        '</div>' +
+      '</div>' +
+      '<div class="mt-5 flex gap-2 justify-end">' +
+        '<button type="button" class="btn-ghost !text-xs js-cancel">Cancel</button>' +
+        '<button type="button" class="btn-primary !text-xs js-confirm-ok">Yes, continue</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(dialog);
+
+  var okButton = dialog.querySelector('.js-confirm-ok');
+  var pendingForm = null;
+
+  dialog.querySelector('.js-cancel').addEventListener('click', function () {
+    pendingForm = null;
+    dialog.close();
+  });
+  dialog.addEventListener('cancel', function () { pendingForm = null; });
+
+  // Show a loading state on submit so a slow solver run never looks frozen.
+  function showBusy(form, button) {
+    if (!button) { return; }
+    var label = button.getAttribute('data-loading');
+    if (label) {
+      button.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + label;
+    }
+    button.disabled = true;
+    form.setAttribute('aria-busy', 'true');
+  }
+
+  okButton.addEventListener('click', function () {
+    var form = pendingForm;
+    pendingForm = null;
+    if (!form) { return; }
+    dialog.close();
+    // Bypass the confirm handler on the resubmission.
+    form.removeAttribute('data-confirm');
+    showBusy(form, form.querySelector('button[data-loading]') || form.querySelector('button[type=submit]'));
+    form.submit();
+  });
+
+  document.addEventListener('submit', function (event) {
+    var form = event.target;
+    if (!(form instanceof HTMLFormElement)) { return; }
+
+    var text = form.getAttribute('data-confirm');
+    if (text) {
+      event.preventDefault();
+      if (!dialog.showModal) {
+        if (window.confirm(text)) { form.removeAttribute('data-confirm'); form.submit(); }
+        return;
+      }
+      pendingForm = form;
+      dialog.querySelector('.js-confirm-message').textContent = text;
+      dialog.showModal();
+      okButton.focus();
+      return;
+    }
+
+    showBusy(form, form.querySelector('button[data-loading]') || form.querySelector('button[type=submit]'));
+  });
+})();
+</script>
 </body>
 </html>

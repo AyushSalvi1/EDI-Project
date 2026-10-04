@@ -43,6 +43,26 @@
     </form>
   </div>
 
+  <div class="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+    <div>
+      <p class="text-sm font-bold text-slate-900 flex items-center gap-2">
+        <i class="fa-solid fa-file-pdf text-rose-500"></i> Have the college's PDF instead?
+      </p>
+      <p class="text-[11px] text-slate-500 mt-1">
+        The PDF importer reads calendars, rooms and the faculty allocation grid directly,
+        with a mapping review step before anything is saved.
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-secondary !text-xs">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Import from PDF
+      </a>
+      <a href="{% url 'scheduler:capacity_report' %}" class="btn-ghost !text-xs">
+        <i class="fa-solid fa-chart-column text-indigo-500"></i> Capacity Report
+      </a>
+    </div>
+  </div>
+
   <!-- Schema Specification & Sample Snippet -->
   <div class="card p-6 space-y-4">
     <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">

@@ -116,9 +116,49 @@ def validate_college_data(data: dict):
             year_num = y.get("year")
             num_divs = y.get("number_of_divisions")
             strength = y.get("strength_per_division")
+            explicit = y.get("divisions")
 
             if not isinstance(year_num, int) or not (1 <= year_num <= 4):
                 errors.append(f"In 'years'[{idx}]: 'year' must be an integer between 1 and 4.")
+
+            if explicit is not None:
+                # Explicit numbering: divisions may be A/B/C, 1..6, or have gaps.
+                if not isinstance(explicit, list) or len(explicit) == 0:
+                    errors.append(f"In 'years'[{idx}]: 'divisions' must be a non-empty list.")
+                else:
+                    seen_numbers = set()
+                    local_ok = True
+                    for d_idx, div in enumerate(explicit):
+                        if not isinstance(div, dict):
+                            errors.append(f"In 'years'[{idx}].divisions[{d_idx}] must be an object.")
+                            local_ok = False
+                            continue
+                        d_num = div.get("division_number")
+                        d_strength = div.get("strength", strength)
+                        if not isinstance(d_num, int) or d_num <= 0:
+                            errors.append(
+                                f"In 'years'[{idx}].divisions[{d_idx}]: 'division_number' "
+                                f"must be a positive integer (got: {d_num!r})."
+                            )
+                            local_ok = False
+                            continue
+                        if d_num in seen_numbers:
+                            errors.append(
+                                f"In 'years'[{idx}]: duplicate division number {d_num} for year {year_num}."
+                            )
+                            local_ok = False
+                            continue
+                        seen_numbers.add(d_num)
+                        if not isinstance(d_strength, int) or d_strength <= 0:
+                            errors.append(
+                                f"In 'years'[{idx}].divisions[{d_idx}]: 'strength' must be "
+                                f"a positive integer (got: {d_strength!r})."
+                            )
+                            local_ok = False
+                    if isinstance(year_num, int) and local_ok:
+                        year_division_map[year_num] = set(seen_numbers)
+                    continue
+
             if not isinstance(num_divs, int) or num_divs <= 0:
                 errors.append(f"In 'years'[{idx}]: 'number_of_divisions' must be a positive integer.")
             if not isinstance(strength, int) or strength <= 0:
@@ -253,14 +293,25 @@ def import_college_data_from_dict(data: dict) -> dict:
         division_lookup = {}  # (year, division_num) -> YearDivision
         created_divisions = []
         for y_entry in data["years"]:
-            divs = YearDivision.generate_for_year(
-                year=y_entry["year"],
-                number_of_divisions=y_entry["number_of_divisions"],
-                strength=y_entry["strength_per_division"]
-            )
-            for local_division_number, d in enumerate(divs, start=1):
-                division_lookup[(d.year, local_division_number)] = d
-                created_divisions.append(d)
+            explicit = y_entry.get("divisions")
+            if explicit:
+                for d_entry in explicit:
+                    obj, _ = YearDivision.objects.update_or_create(
+                        year=y_entry["year"],
+                        division_number=d_entry["division_number"],
+                        defaults={"strength": d_entry.get("strength", y_entry.get("strength_per_division", 60))},
+                    )
+                    division_lookup[(obj.year, obj.division_number)] = obj
+                    created_divisions.append(obj)
+            else:
+                divs = YearDivision.generate_for_year(
+                    year=y_entry["year"],
+                    number_of_divisions=y_entry["number_of_divisions"],
+                    strength=y_entry["strength_per_division"]
+                )
+                for local_division_number, d in enumerate(divs, start=1):
+                    division_lookup[(d.year, local_division_number)] = d
+                    created_divisions.append(d)
 
         # 4. Create Subjects
         subject_lookup = {}  # subject_id -> Subject
@@ -337,6 +388,22 @@ def import_college_data_from_dict(data: dict) -> dict:
                 )
                 created_assignments.append(assignment)
 
+        import_warnings = []
+
+        # TimeSlot rows are shared across all semesters, so a college that works
+        # different hours will silently reuse the grid created by whoever
+        # imported first. Surface that instead of letting it pass unnoticed.
+        requested_days = {d.upper() for d in college["working_days"]}
+        existing_days = {s.day for s in TimeSlot.objects.all()}
+        if existing_days and existing_days != requested_days:
+            missing = sorted(requested_days - existing_days)
+            if missing:
+                import_warnings.append(
+                    f"Time slots already existed for {sorted(existing_days)}, so the "
+                    f"requested working days {missing} were not created. Classes can "
+                    f"only be scheduled into the existing period grid."
+                )
+
         return {
             "semester": semester,
             "divisions_count": len(created_divisions),
@@ -345,6 +412,7 @@ def import_college_data_from_dict(data: dict) -> dict:
             "teachers_count": len(created_teachers),
             "assignments_count": len(created_assignments),
             "slots_count": len(created_slots),
+            "warnings": import_warnings,
         }
 
 

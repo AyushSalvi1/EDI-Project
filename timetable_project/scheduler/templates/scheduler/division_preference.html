@@ -1,0 +1,89 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}{{ division.name }} Slot Preference | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl space-y-5">
+
+  <div class="card p-4 sm:p-6">
+    <a href="{% url 'scheduler:preferences' %}" class="text-[11px] font-bold text-indigo-600 hover:underline">
+      <i class="fa-solid fa-arrow-left"></i> Back to Timetable Preferences
+    </a>
+    <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2 flex items-center gap-2">
+      <i class="fa-solid fa-user-group text-indigo-600"></i> {{ division.name }} &mdash; Preferred Slots
+    </h1>
+    <p class="text-xs sm:text-sm text-slate-500 mt-1">
+      Restrict this division to the days and periods it actually attends.
+      {{ division.strength }} students. Takes effect the next time the timetable is generated.
+    </p>
+  </div>
+
+  <form method="POST" class="space-y-5">
+    {% csrf_token %}
+
+    <div class="card p-4 sm:p-6 space-y-5">
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-2">Days This Division Attends</label>
+        <div class="flex flex-wrap gap-2">
+          {% for key, label in day_choices %}
+          <label class="cursor-pointer">
+            <input type="checkbox" name="working_days" value="{{ key }}"
+                   {% if key in preference.day_list %}checked{% endif %} class="peer sr-only">
+            <span class="inline-flex px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-500 transition
+                         peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:text-indigo-700
+                         hover:border-slate-300 cursor-pointer">
+              {{ label|slice:":3" }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+        <p class="text-[11px] text-slate-400 mt-2">Tick none to follow every college working day.</p>
+      </div>
+
+      <div class="grid sm:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">First Period</label>
+          <input type="number" name="first_period" min="1" value="{{ preference.first_period }}"
+                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <p class="text-[10px] text-slate-400 mt-1">This division starts no earlier than this period.</p>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Last Period</label>
+          <input type="number" name="last_period" min="0" value="{{ preference.last_period }}"
+                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <p class="text-[10px] text-slate-400 mt-1">Use 0 for no upper limit.</p>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Note (optional)</label>
+        <input type="text" name="note" maxlength="200" value="{{ preference.note }}"
+               placeholder="e.g. Second year practicals only run in the afternoon"
+               class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+      </div>
+    </div>
+
+    <div class="card p-4 sm:p-5">
+      <p class="text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">Resulting Availability</p>
+      <p class="text-xs text-slate-700">
+        <strong class="text-indigo-600">{{ allowed_count }}</strong> usable period(s) a week for this division.
+      </p>
+      <p class="text-[10px] text-slate-400 mt-1">
+        If availability is lower than this division's weekly load, some hours cannot
+        be scheduled and will appear in the Issue Centre.
+      </p>
+    </div>
+
+    <div class="flex flex-wrap gap-2">
+      <button class="btn-primary"><i class="fa-solid fa-check"></i> Save Preference</button>
+      <a href="{% url 'scheduler:preferences' %}" class="btn-ghost">Cancel</a>
+      {% if preference.pk %}
+      <button type="submit" name="action" value="clear" class="btn-ghost !text-rose-600"
+              onclick="return confirm('Remove this division preference? It will follow the college-wide timetable again.')">
+        <i class="fa-solid fa-trash"></i> Remove Preference
+      </button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

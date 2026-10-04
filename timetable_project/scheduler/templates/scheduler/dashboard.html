@@ -3,7 +3,7 @@
 {% block title %}Dashboard | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
-<div class="space-y-8">
+<div class="space-y-6">
 
   <!-- Hero Header -->
   <div class="card p-6 sm:p-8 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white relative overflow-hidden">
@@ -13,23 +13,75 @@
       </span>
       <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Automatic Timetable Generator</h1>
       <p class="mt-2 text-sm sm:text-base text-slate-300 leading-relaxed">
-        Upload a single JSON file with college schedules, courses, rooms, and teacher allocations.
-        The Google OR-Tools CP-SAT solver computes an optimal, conflict-free schedule across all 1st to 4th year divisions.
+        Import the college's own timetable PDF or a JSON file. The Google OR-Tools CP-SAT
+        solver computes a conflict-free schedule across all 1st to 4th year divisions,
+        and tells you exactly what it could not schedule &mdash; with fixes you can approve.
       </p>
 
       <div class="mt-6 flex flex-wrap gap-3">
-        <a href="{% url 'scheduler:upload_json' %}" class="btn-primary">
-          <i class="fa-solid fa-cloud-arrow-up"></i> Upload JSON Data
+        <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary">
+          <i class="fa-solid fa-file-pdf"></i> Import from PDF
         </a>
-        <a href="{% url 'scheduler:generate_timetable' %}" class="btn-secondary">
-          <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Timetable
+        <a href="{% url 'scheduler:issue_centre' %}" class="btn-secondary">
+          <i class="fa-solid fa-triangle-exclamation"></i> Issues &amp; Fixes
         </a>
         <a href="{% url 'scheduler:timetable_view' %}" class="btn-ghost !bg-slate-800/80 !text-white !border-slate-700 hover:!bg-slate-700">
-          <i class="fa-solid fa-table-cells"></i> View Division Grid
+          <i class="fa-solid fa-table-cells"></i> View Timetables
         </a>
       </div>
     </div>
   </div>
+
+  <!-- Attention banner: the one thing that most needs doing -->
+  {% if active_semester %}
+  <div class="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4
+    {% if total_issues %}border-l-amber-500 bg-amber-50/40
+    {% elif pending_proposals %}border-l-indigo-500 bg-indigo-50/40
+    {% else %}border-l-emerald-500 bg-emerald-50/40{% endif %}">
+    <div class="flex items-start gap-3 min-w-0">
+      <span class="w-11 h-11 rounded-xl grid place-items-center text-white shrink-0
+        {% if total_issues %}bg-amber-500
+        {% elif pending_proposals %}bg-indigo-600
+        {% else %}bg-emerald-500{% endif %}">
+        <i class="fa-solid
+          {% if total_issues %}fa-triangle-exclamation
+          {% elif pending_proposals %}fa-lightbulb
+          {% else %}fa-circle-check{% endif %}"></i>
+      </span>
+      <div class="min-w-0">
+        <p class="text-sm font-extrabold text-slate-900">
+          {% if total_issues %}
+            {{ total_issues }} issue{{ total_issues|pluralize }} need attention
+          {% elif pending_proposals %}
+            {{ pending_proposals }} suggested fix{{ pending_proposals|pluralize }} waiting for your approval
+          {% else %}
+            Everything is scheduled and nothing needs approval
+          {% endif %}
+        </p>
+        <p class="text-[11px] text-slate-600 mt-0.5">
+          {% if total_issues %}
+            {{ total_entries }} of {{ hours_requested }} weekly hours placed ({{ coverage_percent }}%).
+            Open the Issue Centre to see verified fixes.
+          {% elif pending_proposals %}
+            Approve a fix and everyone affected is notified automatically.
+          {% else %}
+            {{ total_entries }} classes placed for {{ active_semester.name }} with no conflicts.
+          {% endif %}
+        </p>
+      </div>
+    </div>
+    {% if total_issues or pending_proposals %}
+    <a href="{% url 'scheduler:issue_centre' %}" class="btn-primary !text-xs !py-2 shrink-0">
+      {% if pending_proposals and not total_issues %}Review Fixes{% else %}Review Issues{% endif %}
+      <i class="fa-solid fa-arrow-right"></i>
+    </a>
+    {% else %}
+    <a href="{% url 'scheduler:capacity_report' %}" class="btn-ghost !text-xs !py-2 shrink-0">
+      Capacity Report <i class="fa-solid fa-arrow-right"></i>
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
 
   <!-- Key Statistics Grid -->
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -60,7 +112,7 @@
     <div class="card p-4 text-center">
       <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Scheduled Slots</div>
       <div class="mt-2 text-2xl font-bold text-indigo-600">{{ total_entries }}</div>
-      <div class="mt-1 text-xs text-slate-400">Active Semester</div>
+      <div class="mt-1 text-xs text-slate-400">{{ coverage_percent }}% of {{ hours_requested }}</div>
     </div>
 
     <div class="card p-4 text-center">
@@ -68,7 +120,10 @@
       <div class="mt-2 text-2xl font-bold {% if total_issues > 0 %}text-amber-600{% else %}text-emerald-600{% endif %}">
         {{ total_issues }}
       </div>
-      <div class="mt-1 text-xs text-slate-400">Over-commitments</div>
+      <div class="mt-1 text-xs text-slate-400">
+        {% if total_issues %}<a href="{% url 'scheduler:issue_centre' %}" class="text-amber-600 hover:underline font-semibold">Review &amp; fix</a>
+        {% else %}Nothing unresolved{% endif %}
+      </div>
     </div>
   </div>
 
@@ -95,6 +150,9 @@
             <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ active_semester.id }}" class="btn-primary !text-xs !py-1.5">
               <i class="fa-solid fa-rotate"></i> Solver
             </a>
+            <a href="{% url 'scheduler:preferences' %}?semester_id={{ active_semester.id }}" class="btn-ghost !text-xs !py-1.5">
+              <i class="fa-solid fa-sliders"></i> Preferences
+            </a>
             <a href="{% url 'scheduler:timetable_view' %}?semester_id={{ active_semester.id }}" class="btn-ghost !text-xs !py-1.5">
               <i class="fa-solid fa-eye"></i> View
             </a>
@@ -105,9 +163,14 @@
       <div class="mt-4 text-center py-8 border border-dashed rounded-xl border-slate-300">
         <i class="fa-solid fa-folder-open text-slate-400 text-3xl mb-2"></i>
         <p class="text-sm text-slate-500">No semester data found.</p>
-        <a href="{% url 'scheduler:upload_json' %}" class="btn-primary mt-3">
-          Upload JSON Data
-        </a>
+        <div class="flex flex-wrap justify-center gap-2 mt-3">
+          <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary">
+            <i class="fa-solid fa-file-pdf"></i> Import from PDF
+          </a>
+          <a href="{% url 'scheduler:upload_json' %}" class="btn-ghost">
+            <i class="fa-solid fa-file-code"></i> Upload JSON
+          </a>
+        </div>
       </div>
       {% endif %}
 

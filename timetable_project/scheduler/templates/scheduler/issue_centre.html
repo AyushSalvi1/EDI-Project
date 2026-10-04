@@ -1,0 +1,213 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Issue Centre | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-5">
+
+  <!-- Header -->
+  <div class="card p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <div>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+        <i class="fa-solid fa-triangle-exclamation text-amber-500"></i> Issue Centre
+      </h1>
+      <p class="text-xs sm:text-sm text-slate-500 mt-1">
+        Everything the solver could not schedule. Suggested fixes are proven in a
+        sandbox before you see them, and nothing changes until you approve.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <form method="GET" class="flex items-center gap-2">
+        <select name="semester_id" onchange="this.form.submit()"
+                class="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          {% for s in semesters %}
+          <option value="{{ s.id }}" {% if selected_semester and s.id == selected_semester.id %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </form>
+      {% if issues %}
+      <form method="POST" action="{% url 'scheduler:find_fixes' %}" class="js-confirm"
+            data-confirm="Analyse every issue and suggest fixes? This runs the solver several times in a sandbox and may take a few seconds. Nothing will be changed.">
+        {% csrf_token %}
+        <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+        <button class="btn-primary" data-loading="Analysing&hellip;">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Suggest Fixes
+        </button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if not selected_semester %}
+    <div class="card p-8 text-center">
+      <i class="fa-solid fa-inbox text-3xl text-slate-300"></i>
+      <p class="text-sm text-slate-500 mt-3">No semester data yet.</p>
+      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary mt-4">
+        <i class="fa-solid fa-file-pdf"></i> Import College Data
+      </a>
+    </div>
+  {% elif not issues %}
+    <!-- All clear -->
+    <div class="card p-8 text-center">
+      <div class="w-14 h-14 rounded-2xl bg-emerald-100 grid place-items-center mx-auto">
+        <i class="fa-solid fa-circle-check text-emerald-600 text-2xl"></i>
+      </div>
+      <h2 class="text-base font-extrabold text-slate-900 mt-4">Every requested hour is scheduled</h2>
+      <p class="text-xs text-slate-500 mt-1">
+        {{ entries_count }} classes placed across {{ selected_semester.name }} with no conflicts
+        and nothing left unresolved.
+      </p>
+      <div class="flex flex-wrap justify-center gap-2 mt-5">
+        <a href="{% url 'scheduler:timetable_view' %}?semester_id={{ selected_semester.id }}" class="btn-ghost">
+          <i class="fa-solid fa-table-cells"></i> View Timetable
+        </a>
+        <a href="{% url 'scheduler:preferences' %}?semester_id={{ selected_semester.id }}" class="btn-ghost">
+          <i class="fa-solid fa-sliders"></i> Timetable Preferences
+        </a>
+      </div>
+    </div>
+  {% else %}
+
+  <!-- Summary strip -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Unresolved Issues</p>
+      <p class="text-2xl font-extrabold text-amber-600 mt-1">{{ issues|length }}</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Hours Placed</p>
+      <p class="text-2xl font-extrabold text-emerald-600 mt-1">{{ hours_scheduled }}</p>
+      <p class="text-[10px] text-slate-400">of {{ hours_requested }} requested</p>
+    </div>
+    <div class="card p-4">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Recovery</p>
+      <p class="text-2xl font-extrabold text-indigo-600 mt-1">{{ recovery_percent }}%</p>
+      <div class="h-1.5 rounded-full bg-slate-200 mt-2 overflow-hidden">
+        <div class="h-full bg-indigo-500 rounded-full" style="width:{{ recovery_percent }}%"></div>
+      </div>
+    </div>
+    <div class="card p-4">
+      <p class="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Awaiting Approval</p>
+      <p class="text-2xl font-extrabold {% if pending_proposals %}text-amber-600{% else %}text-slate-400{% endif %} mt-1">{{ pending_proposals }}</p>
+      {% if pending_proposals %}
+      <a href="{% url 'scheduler:proposal_list' %}?semester_id={{ selected_semester.id }}" class="text-[10px] font-bold text-indigo-600 hover:underline">Review now</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Issue list -->
+  <div class="space-y-4">
+    {% for issue in issues %}
+    <div class="card overflow-hidden">
+      <div class="p-4 sm:p-5">
+        <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+          <div class="min-w-0">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-700">
+                {{ issue.hours_scheduled }}/{{ issue.hours_requested }} hrs
+              </span>
+              <h3 class="text-sm font-extrabold text-slate-900">{{ issue.assignment.subject.name }}</h3>
+              {% if issue.assignment.subject.is_lab %}
+              <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-700">LAB</span>
+              {% endif %}
+            </div>
+            <p class="text-xs text-slate-500 mt-1">
+              {{ issue.assignment.division.name }} &bull; {{ issue.assignment.teacher.name }}
+            </p>
+          </div>
+          <form method="POST" action="{% url 'scheduler:find_fixes' %}" class="js-confirm shrink-0"
+                data-confirm="Analyse this issue and suggest fixes? Nothing will be changed.">
+            {% csrf_token %}
+            <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+            <input type="hidden" name="issue_id" value="{{ issue.id }}">
+            <button class="btn-secondary !text-xs !py-2" data-loading="Analysing&hellip;">
+              <i class="fa-solid fa-magnifying-glass-chart"></i>
+              {% if issue.proposals.all %}Find More Fixes{% else %}Resolve{% endif %}
+            </button>
+          </form>
+        </div>
+
+        <div class="mt-3 grid sm:grid-cols-2 gap-3">
+          <div class="p-3 rounded-xl bg-rose-50 border border-rose-100">
+            <p class="text-[10px] font-bold text-rose-700 uppercase tracking-wide mb-1">Why it failed</p>
+            <p class="text-[11px] text-rose-900 leading-relaxed">{{ issue.reason }}</p>
+          </div>
+          <div class="p-3 rounded-xl bg-sky-50 border border-sky-100">
+            <p class="text-[10px] font-bold text-sky-700 uppercase tracking-wide mb-1">Solver's suggestion</p>
+            <p class="text-[11px] text-sky-900 leading-relaxed">{{ issue.suggestion }}</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Existing proposals for this issue -->
+      {% with proposals=issue.proposals.all %}
+      {% if proposals %}
+      <div class="border-t border-slate-100 bg-slate-50/60 p-4 sm:p-5">
+        <p class="text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-3">
+          Suggested fixes ({{ proposals|length }})
+        </p>
+        <div class="space-y-2.5">
+          {% for proposal in proposals %}
+          <div class="p-3.5 rounded-xl bg-white border border-slate-200 {% if proposal.status == 'PENDING' %}border-l-4 border-l-indigo-500{% else %}opacity-75{% endif %}">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="text-xs font-bold text-slate-900">{{ proposal.title }}</p>
+                  {% if proposal.verified_gain_hours %}
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-700">
+                    <i class="fa-solid fa-flask"></i> +{{ proposal.verified_gain_hours }}h verified
+                  </span>
+                  {% elif proposal.status == 'PENDING' %}
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-slate-200 text-slate-600">
+                    not verified
+                  </span>
+                  {% endif %}
+                  <span class="px-1.5 py-0.5 rounded text-[9px] font-bold
+                    {% if proposal.status == 'PENDING' %}bg-amber-100 text-amber-700
+                    {% elif proposal.status == 'APPLIED' %}bg-emerald-100 text-emerald-700
+                    {% elif proposal.status == 'REJECTED' %}bg-slate-200 text-slate-600
+                    {% else %}bg-rose-100 text-rose-700{% endif %}">
+                    {{ proposal.get_status_display }}
+                  </span>
+                </div>
+                <p class="text-[11px] text-slate-600 leading-relaxed mt-1.5">{{ proposal.rationale }}</p>
+                <p class="text-[11px] font-semibold text-indigo-600 mt-1">{{ proposal.expected_effect }}</p>
+                {% if proposal.result_note %}
+                <p class="text-[10px] text-slate-500 mt-1 italic">{{ proposal.result_note }}</p>
+                {% endif %}
+              </div>
+
+              {% if proposal.is_actionable %}
+              <div class="flex gap-2 shrink-0">
+                <form method="POST" action="{% url 'scheduler:approve_proposal' proposal.pk %}" class="js-confirm"
+                      data-confirm="Apply this fix? It will change the timetable and notify everyone affected. This cannot be undone from here.">
+                  {% csrf_token %}
+                  <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+                  <input type="hidden" name="next" value="{% url 'scheduler:issue_centre' %}?semester_id={{ selected_semester.id }}">
+                  <button class="btn-secondary !text-[11px] !py-2" data-loading="Applying&hellip;">
+                    <i class="fa-solid fa-circle-check"></i> Approve &amp; Apply
+                  </button>
+                </form>
+                <form method="POST" action="{% url 'scheduler:reject_proposal' proposal.pk %}" class="js-confirm"
+                      data-confirm="Decline this suggestion? The timetable will not change.">
+                  {% csrf_token %}
+                  <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+                  <button class="btn-ghost !text-[11px] !py-2">
+                    <i class="fa-solid fa-xmark"></i> Decline
+                  </button>
+                </form>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+      {% endwith %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

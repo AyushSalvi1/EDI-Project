@@ -43,7 +43,25 @@
           </select>
         </div>
 
-        <div class="pt-5">
+        <div class="pt-5 flex flex-wrap gap-2">
+          {% if selected_division and selected_semester %}
+          <a href="{% url 'scheduler:export_division_pdf' selected_division.id %}?semester_id={{ selected_semester.id }}"
+             class="btn-ghost !text-xs !py-1.5">
+            <i class="fa-solid fa-file-pdf text-rose-500"></i> This Division
+          </a>
+          <a href="{% url 'scheduler:export_full_pdf' %}?semester_id={{ selected_semester.id }}"
+             class="btn-ghost !text-xs !py-1.5">
+            <i class="fa-solid fa-file-pdf text-rose-500"></i> All Divisions
+          </a>
+          <a href="{% url 'scheduler:export_faculty_pdf' %}?semester_id={{ selected_semester.id }}"
+             class="btn-ghost !text-xs !py-1.5">
+            <i class="fa-solid fa-users text-rose-500"></i> Faculty Load
+          </a>
+          <a href="{% url 'scheduler:export_issues_pdf' %}?semester_id={{ selected_semester.id }}"
+             class="btn-ghost !text-xs !py-1.5">
+            <i class="fa-solid fa-triangle-exclamation text-amber-500"></i> Issues
+          </a>
+          {% endif %}
           <button type="button" onclick="window.print()" class="btn-ghost !text-xs !py-1.5">
             <i class="fa-solid fa-print"></i> Print / PDF
           </button>
