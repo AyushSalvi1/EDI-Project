@@ -1,0 +1,44 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Remove Entry | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto space-y-6">
+
+  <div class="card p-6 sm:p-8 text-center">
+    <div class="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center mx-auto mb-4">
+      <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg"></i>
+    </div>
+    <h1 class="text-lg font-extrabold text-slate-900">Remove this scheduled class?</h1>
+    <p class="text-xs text-slate-500 mt-2">
+      The period will become free for that division. Re-running the solver can redistribute the hours.
+    </p>
+  </div>
+
+  <div class="card p-4 sm:p-5">
+    <p class="text-[11px] font-semibold text-slate-600 uppercase mb-2">Class to be removed</p>
+    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+      <p class="text-sm font-bold text-slate-900">{{ entry.assignment.subject.name }}
+        {% if entry.assignment.subject.is_lab %}<span class="text-purple-600 text-xs">(Lab)</span>{% endif %}
+      </p>
+      <p class="text-xs text-slate-600 mt-1">{{ entry.assignment.division.name }} &bull; {{ entry.assignment.teacher.name }}</p>
+      <p class="text-xs font-mono text-slate-500 mt-0.5">
+        {{ entry.time_slot.slot_code }} &bull;
+        {{ entry.time_slot.start_time|time:"H:i" }}&ndash;{{ entry.time_slot.end_time|time:"H:i" }}
+        &bull; {{ entry.room.name }}
+      </p>
+    </div>
+  </div>
+
+  <form method="POST" class="flex flex-wrap gap-2">
+    {% csrf_token %}
+    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm shadow transition">
+      <i class="fa-solid fa-trash"></i> Yes, remove it
+    </button>
+    <a href="{% url 'scheduler:manage_entries' %}?semester_id={{ entry.semester_id }}" class="btn-ghost">
+      <i class="fa-solid fa-xmark"></i> Cancel
+    </a>
+  </form>
+
+</div>
+{% endblock %}

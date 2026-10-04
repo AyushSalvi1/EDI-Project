@@ -35,7 +35,9 @@ ALLOWED_HOSTS = [
     if host.strip()
 ]
 
-LOGIN_URL = '/admin/login/'
+LOGIN_URL = 'scheduler:login'
+LOGIN_REDIRECT_URL = 'scheduler:home'
+LOGOUT_REDIRECT_URL = 'scheduler:login'
 
 
 # Application definition

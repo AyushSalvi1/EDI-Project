@@ -1,4 +1,6 @@
 from django.contrib import admin, messages
+from django.contrib.auth.models import Group, User
+from django.utils.crypto import get_random_string
 from django.utils.html import format_html
 from .models import (
     Semester,
@@ -9,10 +11,13 @@ from .models import (
     Teacher,
     TeacherUnavailability,
     Assignment,
+    Student,
     TimetableEntry,
+    TimetableChangeLog,
     SchedulingIssue,
     SolverRun,
 )
+from .roles import TEACHER_GROUP
 from .solver import generate_timetable, TimetableSolverError
 
 
@@ -51,6 +56,7 @@ class SemesterAdmin(admin.ModelAdmin):
 class YearDivisionAdmin(admin.ModelAdmin):
     list_display = ("name", "year", "division_number", "strength")
     list_filter = ("year",)
+    search_fields = ("name",)
 
 
 @admin.register(Subject)
@@ -80,9 +86,62 @@ class TeacherUnavailabilityInline(admin.TabularInline):
 
 @admin.register(Teacher)
 class TeacherAdmin(admin.ModelAdmin):
-    list_display = ("name", "max_hours_per_week")
-    search_fields = ("name",)
+    list_display = ("name", "max_hours_per_week", "login_account")
+    list_filter = ("user",)
+    search_fields = ("name", "user__username")
     inlines = [TeacherUnavailabilityInline]
+    actions = ["action_create_login_accounts"]
+    autocomplete_fields = ("user",)
+
+    @admin.display(description="Login Account")
+    def login_account(self, obj):
+        if obj.user:
+            return format_html(
+                '<span style="color:#059669;font-weight:600;">{}</span>', obj.user.username
+            )
+        return format_html('<span style="color:#dc2626;">No login yet</span>')
+
+    @admin.action(description="Create portal login accounts for selected teachers")
+    def action_create_login_accounts(self, request, queryset):
+        group, _ = Group.objects.get_or_create(name=TEACHER_GROUP)
+        created, skipped = [], []
+        for teacher in queryset:
+            if teacher.user:
+                skipped.append(teacher.name)
+                continue
+            base = teacher.name.split()[-1].lower() or f"teacher{teacher.pk}"
+            username, suffix = base, 1
+            while User.objects.filter(username=username).exists():
+                suffix += 1
+                username = f"{base}{suffix}"
+
+            temporary_password = get_random_string(12)
+            user = User.objects.create_user(
+                username=username,
+                password=temporary_password,
+            )
+            user.first_name = teacher.name
+            user.is_staff = False
+            user.save()
+            user.groups.add(group)
+            teacher.user = user
+            teacher.save(update_fields=["user"])
+            created.append(f"{username} / {temporary_password}")
+
+        if created:
+            self.message_user(
+                request,
+                "Created %d teacher login(s). Temporary username / password pairs "
+                "(shown once - share them securely and ask the teacher to change the "
+                "password after first sign-in): %s" % (len(created), ", ".join(created)),
+                messages.SUCCESS,
+            )
+        if skipped:
+            self.message_user(
+                request,
+                f"Skipped {len(skipped)} teacher(s) that already had a login.",
+                messages.WARNING,
+            )
 
 
 @admin.register(TeacherUnavailability)
@@ -139,6 +198,7 @@ class TimetableEntryAdmin(admin.ModelAdmin):
     list_display = ("semester", "time_slot", "get_division", "get_subject", "get_teacher", "room")
     list_filter = ("semester", "time_slot__day", "room")
     search_fields = ("assignment__teacher__name", "assignment__subject__name", "assignment__division__name")
+    actions = ["action_open_manager"]
 
     def get_division(self, obj):
         return obj.assignment.division.name
@@ -152,12 +212,55 @@ class TimetableEntryAdmin(admin.ModelAdmin):
         return obj.assignment.teacher.name
     get_teacher.short_description = "Teacher"
 
+    @admin.action(description="Open these semesters in the timetable manager")
+    def action_open_manager(self, request, queryset):
+        semester_ids = sorted(set(queryset.values_list("semester_id", flat=True)))
+        if not semester_ids:
+            return
+        url = "/manage/entries/?semester_id={}".format(semester_ids[0])
+        self.message_user(
+            request,
+            format_html(
+                'Manage, move, swap or remove entries in the <a href="{}" '
+                'style="font-weight:bold;color:#1d4ed8;text-decoration:underline;">timetable manager</a>.',
+                url,
+            ),
+            messages.INFO,
+        )
+
+
+@admin.register(Student)
+class StudentAdmin(admin.ModelAdmin):
+    list_display = ("roll_number", "full_name", "division", "username", "is_active")
+    list_filter = ("division", "is_active")
+    search_fields = ("roll_number", "full_name", "user__username", "email")
+    autocomplete_fields = ("user", "division")
+
+    @admin.display(description="Username")
+    def username(self, obj):
+        return obj.user.username if obj.user else "-"
+    username.short_description = "Username"
+
 
 @admin.register(SchedulingIssue)
 class SchedulingIssueAdmin(admin.ModelAdmin):
     list_display = ("semester", "assignment", "hours_requested", "hours_scheduled", "reason", "suggestion")
     list_filter = ("semester",)
     search_fields = ("assignment__teacher__name", "assignment__subject__name", "reason", "suggestion")
+
+
+@admin.register(TimetableChangeLog)
+class TimetableChangeLogAdmin(admin.ModelAdmin):
+    list_display = ("created_at", "semester", "action", "changed_by")
+    list_filter = ("semester", "action")
+    search_fields = ("detail", "changed_by__username")
+    readonly_fields = ("created_at", "semester", "changed_by", "action", "detail")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(SolverRun)

@@ -1,0 +1,112 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Sign In | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center py-6">
+  <div class="w-full max-w-4xl grid lg:grid-cols-2 gap-6 items-stretch">
+
+    <!-- Sign-in form -->
+    <div class="card p-6 sm:p-8">
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mx-auto shadow mb-3">
+          <i class="fa-solid fa-right-to-bracket text-white text-lg"></i>
+        </div>
+        <h1 class="text-xl font-extrabold text-slate-900">Sign In</h1>
+        <p class="text-xs text-slate-500 mt-1">Access your personalised college timetable</p>
+      </div>
+
+      {% if form.errors %}
+      <div class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium flex items-center gap-2">
+        <i class="fa-solid fa-circle-exclamation text-rose-500"></i>
+        <span>That username and password combination is not recognised.</span>
+      </div>
+      {% endif %}
+
+      <form method="POST" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+
+        <div>
+          <label for="{{ form.username.id_for_label }}" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Username</label>
+          <div class="relative">
+            <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input type="text" name="username" id="{{ form.username.id_for_label }}"
+                   autocomplete="username" autofocus required
+                   value="{{ form.username.value|default:'' }}"
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+        </div>
+
+        <div>
+          <label for="{{ form.password.id_for_label }}" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Password</label>
+          <div class="relative">
+            <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+            <input type="password" name="password" id="{{ form.password.id_for_label }}"
+                   autocomplete="current-password" required
+                   class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary w-full justify-center !py-2.5">
+          <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In
+        </button>
+      </form>
+
+      <div class="mt-6 pt-5 border-t border-slate-200 text-center">
+        <p class="text-xs text-slate-500">
+          New student?
+          <a href="{% url 'scheduler:register' %}" class="font-semibold text-indigo-600 hover:text-indigo-700">Create an account</a>
+        </p>
+        <p class="text-[11px] text-slate-400 mt-1.5">
+          Teacher and administrator logins are issued by the college office.
+        </p>
+      </div>
+    </div>
+
+    <!-- Role explainer -->
+    <div class="card p-6 sm:p-8 flex flex-col">
+      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide mb-1">What each account can do</h2>
+      <p class="text-xs text-slate-500 mb-5">Access is enforced by role, not by page visibility.</p>
+
+      <div class="space-y-3 flex-1">
+        <div class="flex gap-3 p-3.5 rounded-xl bg-rose-50/70 border border-rose-200">
+          <i class="fa-solid fa-user-shield text-rose-500 mt-0.5"></i>
+          <div>
+            <p class="text-xs font-bold text-rose-900">Administrator</p>
+            <p class="text-[11px] text-rose-800/90 mt-0.5">Full control: import data, run the CP-SAT solver, inspect every division, and move, swap or remove any scheduled class.</p>
+          </div>
+        </div>
+
+        <div class="flex gap-3 p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200">
+          <i class="fa-solid fa-user-tie text-indigo-500 mt-0.5"></i>
+          <div>
+            <p class="text-xs font-bold text-indigo-900">Teacher</p>
+            <p class="text-[11px] text-indigo-800/90 mt-0.5">Read-only. Sees only the periods allocated to them, across every division they teach, plus their weekly load against their contract limit.</p>
+          </div>
+        </div>
+
+        <div class="flex gap-3 p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200">
+          <i class="fa-solid fa-graduation-cap text-emerald-500 mt-0.5"></i>
+          <div>
+            <p class="text-xs font-bold text-emerald-900">Student</p>
+            <p class="text-[11px] text-emerald-800/90 mt-0.5">Read-only. Sees only the weekly grid of their own year and division. Cannot browse other divisions, teachers or rooms.</p>
+          </div>
+        </div>
+      </div>
+
+      {% if divisions %}
+      <div class="mt-5 pt-4 border-t border-slate-200">
+        <p class="text-[11px] font-semibold text-slate-600 uppercase mb-2">Active divisions</p>
+        <div class="flex flex-wrap gap-1.5">
+          {% for d in divisions %}
+          <span class="px-2 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-semibold">{{ d.name }}</span>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,177 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Manage Timetable Entries | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+
+  <!-- Header -->
+  <div class="card p-4 sm:p-6">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+          <i class="fa-solid fa-screwdriver-wrench text-indigo-600"></i> Manage Timetable
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-500 mt-1">
+          Every scheduled class for the semester. Each change is validated against the solver's rules before it is saved.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 no-print">
+        <a href="{% url 'scheduler:swap_entries' %}{% if selected_semester %}?semester_id={{ selected_semester.id }}{% endif %}" class="btn-ghost !text-xs !py-1.5">
+          <i class="fa-solid fa-right-left"></i> Swap Two Entries
+        </a>
+        <a href="{% url 'scheduler:generate_timetable' %}{% if selected_semester %}?semester_id={{ selected_semester.id }}{% endif %}" class="btn-primary !text-xs !py-1.5">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Re-run Solver
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <form method="GET" class="card p-4 no-print">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Semester</label>
+        <select name="semester_id" onchange="this.form.submit()" class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          {% for s in semesters %}
+          <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>{{ s.name }}</option>
+          {% empty %}<option disabled selected>None</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Day</label>
+        <select name="day" onchange="this.form.submit()" class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All days</option>
+          {% for key, label in day_choices %}
+          {% if key in days_with_slots %}
+          <option value="{{ key }}" {% if selected_day == key %}selected{% endif %}>{{ label }}</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Room</label>
+        <select name="room_id" onchange="this.form.submit()" class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All rooms</option>
+          {% for r in rooms %}<option value="{{ r.id }}" {% if selected_room_id == r.id|stringformat:'s' %}selected{% endif %}>{{ r.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Division</label>
+        <select name="division_id" onchange="this.form.submit()" class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All divisions</option>
+          {% for d in divisions %}<option value="{{ d.id }}" {% if selected_division_id == d.id|stringformat:'s' %}selected{% endif %}>{{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Teacher</label>
+        <select name="teacher_id" onchange="this.form.submit()" class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">All teachers</option>
+          {% for t in teachers %}<option value="{{ t.id }}" {% if selected_teacher_id == t.id|stringformat:'s' %}selected{% endif %}>{{ t.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Search</label>
+        <input type="text" name="q" value="{{ query }}" placeholder="Subject, teacher, room..."
+               class="w-full rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+      </div>
+    </div>
+  </form>
+
+  <!-- Entries table -->
+  <div class="card overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse min-w-[900px] text-xs">
+        <thead>
+          <tr class="bg-slate-900 text-white font-semibold uppercase tracking-wider">
+            <th class="p-3">Day / Period</th>
+            <th class="p-3">Time</th>
+            <th class="p-3">Division</th>
+            <th class="p-3">Subject</th>
+            <th class="p-3">Teacher</th>
+            <th class="p-3">Room</th>
+            <th class="p-3 text-right no-print">Actions</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-200">
+          {% for entry in page %}
+          <tr class="hover:bg-slate-50/70 transition">
+            <td class="p-3 font-mono font-bold text-slate-700">{{ entry.time_slot.slot_code }}</td>
+            <td class="p-3 font-mono text-slate-500 whitespace-nowrap">
+              {{ entry.time_slot.start_time|time:"H:i" }}&ndash;{{ entry.time_slot.end_time|time:"H:i" }}
+            </td>
+            <td class="p-3 font-semibold text-slate-800">{{ entry.assignment.division.name }}</td>
+            <td class="p-3">
+              <span class="font-semibold text-slate-800">{{ entry.assignment.subject.name }}</span>
+              {% if entry.assignment.subject.is_lab %}
+              <span class="ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-700">LAB</span>
+              {% endif %}
+            </td>
+            <td class="p-3 text-slate-600">{{ entry.assignment.teacher.name }}</td>
+            <td class="p-3 font-mono text-slate-600">{{ entry.room.name }}</td>
+            <td class="p-3 text-right no-print whitespace-nowrap">
+              <a href="{% url 'scheduler:move_entry' entry.id %}" class="btn-ghost !text-[11px] !py-1 !px-2 !rounded-lg">
+                <i class="fa-solid fa-arrows-turn-to-dots"></i> Move
+              </a>
+              <a href="{% url 'scheduler:delete_entry' entry.id %}" class="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-rose-200 bg-rose-50 text-rose-700 text-[11px] font-semibold hover:bg-rose-100 transition">
+                <i class="fa-solid fa-trash"></i> Remove
+              </a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="p-10 text-center text-slate-500">
+              <i class="fa-solid fa-inbox text-slate-300 text-3xl mb-2 block"></i>
+              No timetable entries match these filters.
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if page.paginator.num_pages > 1 %}
+    <div class="flex items-center justify-between gap-3 px-4 py-3 border-t border-slate-200 bg-slate-50 text-[11px] text-slate-500">
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }} &mdash; {{ page.paginator.count }} entries</span>
+      <div class="flex gap-1.5">
+        {% if page.has_previous %}
+        <a href="?{% if selected_semester %}semester_id={{ selected_semester.id }}&amp;{% endif %}{% if selected_day %}day={{ selected_day }}&amp;{% endif %}{% if selected_room_id %}room_id={{ selected_room_id }}&amp;{% endif %}{% if selected_division_id %}division_id={{ selected_division_id }}&amp;{% endif %}{% if selected_teacher_id %}teacher_id={{ selected_teacher_id }}&amp;{% endif %}{% if query %}q={{ query }}&amp;{% endif %}page={{ page.previous_page_number }}"
+           class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 font-semibold">Previous</a>
+        {% endif %}
+        {% if page.has_next %}
+        <a href="?{% if selected_semester %}semester_id={{ selected_semester.id }}&amp;{% endif %}{% if selected_day %}day={{ selected_day }}&amp;{% endif %}{% if selected_room_id %}room_id={{ selected_room_id }}&amp;{% endif %}{% if selected_division_id %}division_id={{ selected_division_id }}&amp;{% endif %}{% if selected_teacher_id %}teacher_id={{ selected_teacher_id }}&amp;{% endif %}{% if query %}q={{ query }}&amp;{% endif %}page={{ page.next_page_number }}"
+           class="px-2.5 py-1 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 font-semibold">Next</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Change history -->
+  <div class="card p-4 sm:p-5">
+    <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3 flex items-center gap-2">
+      <i class="fa-solid fa-clock-rotate-left text-slate-400"></i> Recent Changes
+    </h2>
+    <div class="space-y-2">
+      {% for log in recent_changes %}
+      <div class="flex items-start gap-3 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold shrink-0
+          {% if log.action == 'DELETE' %}bg-rose-100 text-rose-700
+          {% elif log.action == 'SWAP' %}bg-amber-100 text-amber-700
+          {% elif log.action == 'MOVE' %}bg-blue-100 text-blue-700
+          {% else %}bg-emerald-100 text-emerald-700{% endif %}">{{ log.get_action_display }}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] text-slate-700 whitespace-pre-line break-words">{{ log.detail }}</p>
+          <p class="text-[10px] text-slate-400 mt-0.5">
+            {{ log.changed_by.username|default:"system" }} &bull; {{ log.created_at|date:"d M Y, H:i" }}
+          </p>
+        </div>
+      </div>
+      {% empty %}
+      <p class="text-xs text-slate-400 py-2">No manual changes recorded yet.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,80 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Move Entry | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-6">
+
+  <div class="card p-4 sm:p-6">
+    <h1 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+      <i class="fa-solid fa-arrows-turn-to-dots text-indigo-600"></i> Reschedule Entry
+    </h1>
+    <p class="text-xs text-slate-500 mt-1">
+      Change the period and/or room. The move is rejected if it would create a teacher clash, a division clash,
+      a room clash, a room-type mismatch, a capacity shortfall, or land on an unavailable period.
+    </p>
+  </div>
+
+  <!-- Current state -->
+  <div class="card p-4 sm:p-5">
+    <p class="text-[11px] font-semibold text-slate-600 uppercase mb-2">Current Placement</p>
+    <div class="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
+      <div class="text-center px-3 py-2 rounded-lg bg-slate-900 text-white shrink-0">
+        <p class="text-[10px] uppercase text-slate-400 font-semibold">Period</p>
+        <p class="text-sm font-bold font-mono">{{ entry.time_slot.slot_code }}</p>
+      </div>
+      <div class="text-[11px] text-slate-600">
+        <p class="font-bold text-slate-900">{{ entry.assignment.subject.name }}
+          {% if entry.assignment.subject.is_lab %}<span class="text-purple-600"> (Lab)</span>{% endif %}
+        </p>
+        <p>{{ entry.assignment.division.name }} &bull; {{ entry.assignment.teacher.name }}</p>
+        <p class="font-mono text-slate-500">{{ entry.time_slot.start_time|time:"H:i" }}&ndash;{{ entry.time_slot.end_time|time:"H:i" }} in {{ entry.room.name }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Move form -->
+  <form method="POST" class="card p-4 sm:p-6 space-y-4">
+    {% csrf_token %}
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label for="time_slot_id" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Target Period</label>
+        <select name="time_slot_id" id="time_slot_id" required class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          {% for slot in slots %}
+          <option value="{{ slot.id }}" {% if selected_slot_id == slot.id %}selected{% endif %}>
+            {{ slot.slot_code }} &mdash; {{ slot.start_time|time:"H:i" }} to {{ slot.end_time|time:"H:i" }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="room_id" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Target Room</label>
+        <select name="room_id" id="room_id" required class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          {% for room in rooms %}
+          <option value="{{ room.id }}" {% if selected_room_id == room.id %}selected{% endif %}>
+            {{ room.name }} (Cap: {{ room.capacity }})
+          </option>
+          {% empty %}
+          <option disabled selected>No room satisfies this subject's type and the division's strength</option>
+          {% endfor %}
+        </select>
+        <p class="text-[10px] text-slate-400 mt-1">
+          Only rooms matching the subject type with enough capacity are listed.
+        </p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 pt-2">
+      <button type="submit" class="btn-primary">
+        <i class="fa-solid fa-check"></i> Apply Move
+      </button>
+      <a href="{% url 'scheduler:manage_entries' %}?semester_id={{ entry.semester_id }}" class="btn-ghost">
+        <i class="fa-solid fa-xmark"></i> Cancel
+      </a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

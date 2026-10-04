@@ -1,0 +1,70 @@
+{% extends "scheduler/base.html" %}
+
+{% block title %}Swap Entries | Automatic Timetable Generator{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto space-y-6">
+
+  <div class="card p-4 sm:p-6">
+    <h1 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+      <i class="fa-solid fa-right-left text-indigo-600"></i> Swap Two Entries
+    </h1>
+    <p class="text-xs text-slate-500 mt-1">
+      If both classes sit in the same period their rooms are exchanged; otherwise their periods are exchanged.
+      The swap is rejected if either new position would break a scheduling rule.
+    </p>
+  </div>
+
+  <form method="POST" class="card p-4 sm:p-6 space-y-4">
+    {% csrf_token %}
+
+    <div>
+      <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Semester</label>
+      <select name="semester_id_select" onchange="window.location='{% url 'scheduler:swap_entries' %}?semester_id='+this.value"
+              class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        {% for s in semesters %}
+        <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>{{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div>
+        <label for="entry_a" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">First Entry (A)</label>
+        <select name="entry_a" id="entry_a" required
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">-- Select a class --</option>
+          {% for entry in choices %}
+          <option value="{{ entry.id }}">
+            {{ entry.time_slot.slot_code }} | {{ entry.assignment.division.name }} | {{ entry.assignment.subject.name }} | {{ entry.room.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="entry_b" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Second Entry (B)</label>
+        <select name="entry_b" id="entry_b" required
+                class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">-- Select a class --</option>
+          {% for entry in choices %}
+          <option value="{{ entry.id }}">
+            {{ entry.time_slot.slot_code }} | {{ entry.assignment.division.name }} | {{ entry.assignment.subject.name }} | {{ entry.room.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 pt-2">
+      <button type="submit" class="btn-primary">
+        <i class="fa-solid fa-right-left"></i> Swap Entries
+      </button>
+      <a href="{% url 'scheduler:manage_entries' %}{% if selected_semester %}?semester_id={{ selected_semester.id }}{% endif %}" class="btn-ghost">
+        <i class="fa-solid fa-xmark"></i> Cancel
+      </a>
+    </div>
+  </form>
+
+</div>
+{% endblock %}

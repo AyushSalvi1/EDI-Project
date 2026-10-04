@@ -41,22 +41,63 @@
     <!-- Nav links -->
     <div class="flex items-center gap-1.5 text-xs font-semibold">
       {% with url_name=request.resolver_match.url_name %}
-      <a href="{% url 'scheduler:home' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'home' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-        <i class="fa-solid fa-gauge-high"></i><span class="hidden sm:inline">Dashboard</span>
-      </a>
-      <a href="{% url 'scheduler:upload_json' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'upload_json' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-        <i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Upload JSON</span>
-      </a>
-      <a href="{% url 'scheduler:generate_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'generate_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-        <i class="fa-solid fa-wand-magic-sparkles"></i><span class="hidden sm:inline">Generate</span>
-      </a>
-      <a href="{% url 'scheduler:timetable_view' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'timetable_view' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-        <i class="fa-solid fa-table-cells"></i><span class="hidden sm:inline">View Timetable</span>
-      </a>
-      <a href="/admin/" target="_blank" class="ml-2 px-3 py-2 rounded-lg text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 transition flex items-center gap-1.5">
-        <i class="fa-solid fa-sliders"></i><span class="hidden sm:inline">Django Admin</span>
-      </a>
+        {% if user.is_superuser or user.is_staff %}
+          <a href="{% url 'scheduler:home' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'home' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid fa-gauge-high"></i><span class="hidden sm:inline">Dashboard</span>
+          </a>
+          <a href="{% url 'scheduler:upload_json' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'upload_json' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid fa-cloud-arrow-up"></i><span class="hidden sm:inline">Upload JSON</span>
+          </a>
+          <a href="{% url 'scheduler:generate_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'generate_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid fa-wand-magic-sparkles"></i><span class="hidden sm:inline">Generate</span>
+          </a>
+          <a href="{% url 'scheduler:timetable_view' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'timetable_view' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid fa-table-cells"></i><span class="hidden lg:inline">All Divisions</span>
+          </a>
+          <a href="{% url 'scheduler:manage_entries' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'manage_entries' or url_name == 'move_entry' or url_name == 'delete_entry' or url_name == 'swap_entries' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid fa-screwdriver-wrench"></i><span class="hidden lg:inline">Manage</span>
+          </a>
+          <a href="/admin/" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 transition flex items-center gap-1.5">
+            <i class="fa-solid fa-sliders"></i><span class="hidden xl:inline">Django Admin</span>
+          </a>
+        {% else %}
+          <a href="{% url 'scheduler:my_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'my_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+            <i class="fa-solid {% if user.teacher_profile %}fa-chalkboard-user{% else %}fa-graduation-cap{% endif %}"></i><span class="hidden sm:inline">My Timetable</span>
+          </a>
+        {% endif %}
       {% endwith %}
+
+      {% if user.is_authenticated %}
+        <div class="flex items-center gap-2 ml-2 pl-3 border-l border-slate-700">
+          <div class="hidden md:block text-right leading-tight">
+            <span class="block text-[11px] font-bold text-white truncate max-w-[130px]">
+              {% if user.teacher_profile %}{{ user.teacher_profile.name }}
+              {% elif user.student_profile %}{{ user.student_profile.full_name }}
+              {% else %}{{ user.username }}{% endif %}
+            </span>
+            <span class="block text-[9px] uppercase tracking-wider font-bold
+              {% if user.is_superuser or user.is_staff %}text-rose-400{% elif user.teacher_profile %}text-indigo-400{% else %}text-emerald-400{% endif %}">
+              {% if user.is_superuser or user.is_staff %}Admin{% elif user.teacher_profile %}Teacher{% else %}Student{% endif %}
+            </span>
+          </div>
+          <form method="POST" action="{% url 'scheduler:logout' %}">
+            {% csrf_token %}
+            <button type="submit" title="Sign out"
+                    class="px-2.5 py-2 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-slate-800 transition flex items-center">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </button>
+          </form>
+        </div>
+      {% else %}
+        <div class="flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-700">
+          <a href="{% url 'scheduler:login' %}" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition flex items-center gap-1.5">
+            <i class="fa-solid fa-right-to-bracket"></i><span class="hidden sm:inline">Sign In</span>
+          </a>
+          <a href="{% url 'scheduler:register' %}" class="px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition hidden sm:inline-flex items-center">
+            Register
+          </a>
+        </div>
+      {% endif %}
     </div>
   </div>
 </nav>
@@ -85,7 +126,7 @@
 
 <!-- ── FOOTER ───────────────────────────────────────────────────────── -->
 <footer class="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-400 no-print">
-  Automatic Timetable Generator &bull; Google OR-Tools CP-SAT Solver &bull; SQLite Database
+  Automatic Timetable Generator &bull; Google OR-Tools CP-SAT Solver &bull; Role-Based Portals for Admin, Faculty &amp; Students
 </footer>
 
 {% block scripts %}{% endblock %}

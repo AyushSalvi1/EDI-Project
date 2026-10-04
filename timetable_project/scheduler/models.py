@@ -1,5 +1,7 @@
 import math
 from datetime import time
+
+from django.conf import settings
 from django.db import models
 
 
@@ -265,6 +267,14 @@ def generate_time_slots(working_days, daily_start_time, daily_end_time,
 # 6. Teacher
 # ===========================================================================
 class Teacher(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='teacher_profile',
+        help_text="Linked login account. When set, this teacher can sign in and see only their own timetable.",
+    )
     name = models.CharField(max_length=150)
     max_hours_per_week = models.IntegerField(default=24)
 
@@ -313,6 +323,33 @@ class Assignment(models.Model):
 
 
 # ===========================================================================
+# 8b. Student (portal login, scoped to one division)
+# ===========================================================================
+class Student(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='student_profile',
+    )
+    roll_number = models.CharField(max_length=50, unique=True)
+    full_name = models.CharField(max_length=150)
+    email = models.EmailField(blank=True)
+    division = models.ForeignKey(
+        YearDivision,
+        on_delete=models.CASCADE,
+        related_name='students',
+    )
+    enrolled_on = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ['division__year', 'division__division_number', 'roll_number']
+
+    def __str__(self):
+        return f"{self.roll_number} - {self.full_name} ({self.division.name})"
+
+
+# ===========================================================================
 # 9. TimetableEntry (solver output)
 # ===========================================================================
 class TimetableEntry(models.Model):
@@ -346,6 +383,36 @@ class SchedulingIssue(models.Model):
 
     def __str__(self):
         return (f"Issue for {self.assignment}: {self.hours_scheduled}/{self.hours_requested} hrs scheduled")
+
+
+class TimetableChangeLog(models.Model):
+    """Audit trail of manual timetable edits made by administrators."""
+
+    ACTION_CHOICES = [
+        ('REGEN', 'Solver re-run'),
+        ('MOVE', 'Move / Reschedule'),
+        ('SWAP', 'Swap two entries'),
+        ('DELETE', 'Remove entry'),
+    ]
+
+    semester = models.ForeignKey(Semester, on_delete=models.CASCADE, related_name='change_logs')
+    changed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='timetable_changes',
+    )
+    action = models.CharField(max_length=16, choices=ACTION_CHOICES)
+    detail = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        who = self.changed_by.username if self.changed_by else 'system'
+        return f"[{self.get_action_display()}] {who} @ {self.created_at:%Y-%m-%d %H:%M} - {self.semester.name}"
 
 
 class SolverRun(models.Model):
