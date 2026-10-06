@@ -4,7 +4,8 @@ import sys
 import time
 import django
 
-sys.path.insert(0, r"C:\EDI Project\TimeTableGenerator\timetable_project")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "timetable_project.settings")
 django.setup()
 
@@ -21,6 +22,11 @@ from scheduler.pdf_export import (
     build_teacher_load_pdf,
 )
 from bench_scale import build_payload
+
+if os.environ.get("BENCH_DANGEROUS") != "1":
+    print("WARNING: This script DELETES all timetable data before running.")
+    print("Set environment variable BENCH_DANGEROUS=1 to confirm.")
+    sys.exit(1)
 
 Assignment.objects.all().delete()
 TimetableEntry.objects.all().delete()
@@ -47,7 +53,7 @@ t0 = time.perf_counter()
 res = generate_timetable(sem.id)
 print(f"solve: {time.perf_counter()-t0:.2f}s -> {res['message']}")
 
-out_dir = r"C:\Users\lenovo\AppData\Local\Temp\kilo\pdfout"
+out_dir = os.path.join(BASE_DIR, "bench_pdf_output")
 os.makedirs(out_dir, exist_ok=True)
 
 jobs = [

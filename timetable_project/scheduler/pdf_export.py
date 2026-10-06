@@ -9,6 +9,7 @@ produces a clean 32-page document rather than one unreadable table.
 
 from collections import defaultdict
 from io import BytesIO
+import os
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -22,6 +23,7 @@ from reportlab.platypus import (
     Spacer,
     Table,
     TableStyle,
+    Image,
 )
 
 from .models import (
@@ -33,6 +35,10 @@ from .models import (
     TimeSlot,
     YearDivision,
 )
+
+# Path to VIT logo
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+VIT_LOGO_PATH = os.path.join(BASE_DIR, "static", "scheduler", "vit_logo.png")
 
 INDIGO_DARK = colors.HexColor("#312e81")
 SLATE_900 = colors.HexColor("#0f172a")
@@ -147,15 +153,17 @@ def _entries_grid(entries, time_slots, show_division=False, show_teacher=True, s
     table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), SLATE_900),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.4, SLATE_200),
+        ("GRID", (0, 0), (-1, -1), 0.8, SLATE_500),  # Thicker grid lines
         ("VALIGN", (0, 1), (-1, -1), "TOP"),
         ("ALIGN", (0, 0), (0, -1), "CENTER"),
         ("BACKGROUND", (0, 1), (0, -1), colors.HexColor("#f1f5f9")),
-        ("TOPPADDING", (0, 0), (-1, -1), 3),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-        ("LEFTPADDING", (0, 1), (-1, -1), 4),
-        ("RIGHTPADDING", (0, 1), (-1, -1), 4),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 1), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 1), (-1, -1), 5),
         ("ROWBACKGROUNDS", (1, 1), (-1, -1), [colors.white, colors.HexColor("#fbfcfe")]),
+        ("BOX", (0, 0), (-1, -1), 1.2, SLATE_900),  # Outer border
+        ("INNERGRID", (0, 0), (-1, -1), 0.6, SLATE_200),  # Inner grid lines
     ]))
 
     # Colour each day cell according to its subject type.
@@ -170,7 +178,7 @@ def _entries_grid(entries, time_slots, show_division=False, show_teacher=True, s
             fill, border = FREE_FILL, None
         commands = [("BACKGROUND", (column, row_index), (column, row_index), fill)]
         if border is not None:
-            commands.append(("BOX", (column, row_index), (column, row_index), 0.5, border))
+            commands.append(("BOX", (column, row_index), (column, row_index), 0.8, border))
         table.setStyle(TableStyle(commands))
 
     return table
@@ -203,7 +211,15 @@ def build_division_timetable_pdf(semester, division, show_division=False):
         .select_related("assignment__subject", "assignment__teacher", "room", "time_slot")
     )
 
-    story = [
+    # Add VIT logo at the top
+    story = []
+    if os.path.exists(VIT_LOGO_PATH):
+        logo = Image(VIT_LOGO_PATH, width=80*mm, height=32*mm)
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+        story.append(Spacer(1, 6))
+
+    story.extend([
         Paragraph(_escape(division.name), styles["title"]),
         Paragraph(
             f"{_escape(semester.name)} &nbsp;|&nbsp; {_escape(semester.start_date.strftime('%d %b %Y'))}"
@@ -212,7 +228,7 @@ def build_division_timetable_pdf(semester, division, show_division=False):
             styles["subtitle"],
         ),
         Spacer(1, 8),
-    ]
+    ])
 
     if entries:
         story.append(_entries_grid(
@@ -258,13 +274,22 @@ def build_full_institution_pdf(semester):
 
     total_hours = len(all_entries)
 
-    story = [
-        Spacer(1, 30 * mm),
+    story = []
+    
+    # Add VIT logo on cover page
+    if os.path.exists(VIT_LOGO_PATH):
+        logo = Image(VIT_LOGO_PATH, width=100*mm, height=40*mm)
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+        story.append(Spacer(1, 10 * mm))
+
+    story.extend([
+        Spacer(1, 20 * mm),
         Paragraph("COMPLETE COLLEGE TIMETABLE", styles["title"]),
         Paragraph(_escape(semester.name), ParagraphStyle(
             "Semi", parent=styles["subtitle"], fontSize=14, textColor=INDIGO)),
         Spacer(1, 10 * mm),
-    ]
+    ])
 
     summary_rows = [
         ["Divisions", str(len(divisions))],
@@ -314,6 +339,14 @@ def build_full_institution_pdf(semester):
 
     for division in divisions:
         story.append(PageBreak())
+        
+        # Add VIT logo on each division page
+        if os.path.exists(VIT_LOGO_PATH):
+            logo = Image(VIT_LOGO_PATH, width=80*mm, height=32*mm)
+            logo.hAlign = 'CENTER'
+            story.append(logo)
+            story.append(Spacer(1, 4))
+        
         story.append(Paragraph(_escape(division.name), styles["title"]))
         story.append(Paragraph(
             f"{_escape(semester.name)} &nbsp;|&nbsp; Strength: {division.strength}"
@@ -361,11 +394,20 @@ def build_teacher_load_pdf(semester):
         divisions_per_teacher[a.teacher_id].add(a.division.name)
         subjects_per_teacher[a.teacher_id].add(a.subject.name)
 
-    story = [
+    story = []
+    
+    # Add VIT logo
+    if os.path.exists(VIT_LOGO_PATH):
+        logo = Image(VIT_LOGO_PATH, width=80*mm, height=32*mm)
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+        story.append(Spacer(1, 6))
+
+    story.extend([
         Paragraph("FACULTY WORKLOAD REPORT", styles["title"]),
         Paragraph(_escape(semester.name), styles["subtitle"]),
         Spacer(1, 8),
-    ]
+    ])
 
     rows = [[
         Paragraph("<b>Teacher</b>", styles["cell"]),
@@ -406,13 +448,15 @@ def build_teacher_load_pdf(semester):
     style = [
         ("BACKGROUND", (0, 0), (-1, 0), SLATE_900),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("GRID", (0, 0), (-1, -1), 0.4, SLATE_200),
+        ("GRID", (0, 0), (-1, -1), 0.8, SLATE_500),  # Thicker grid
         ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
         ("ALIGN", (1, 1), (-1, -1), "CENTER"),
         ("TOPPADDING", (0, 0), (-1, -1), 4),
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (-1, -1), 6),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#f8fafc")]),
+        ("BOX", (0, 0), (-1, -1), 1.2, SLATE_900),
+        ("INNERGRID", (0, 0), (-1, -1), 0.6, SLATE_200),
     ]
     table.setStyle(TableStyle(style))
 
@@ -443,11 +487,20 @@ def build_issues_pdf(semester):
         .order_by("assignment__division__year", "assignment__division__division_number")
     )
 
-    story = [
+    story = []
+    
+    # Add VIT logo
+    if os.path.exists(VIT_LOGO_PATH):
+        logo = Image(VIT_LOGO_PATH, width=80*mm, height=32*mm)
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+        story.append(Spacer(1, 6))
+
+    story.extend([
         Paragraph("SCHEDULING ISSUE REPORT", styles["title"]),
         Paragraph(_escape(semester.name), styles["subtitle"]),
         Spacer(1, 8),
-    ]
+    ])
 
     if not issues:
         story.append(Paragraph(
@@ -460,7 +513,7 @@ def build_issues_pdf(semester):
             Paragraph("<b>Req.</b>", styles["cell"]),
             Paragraph("<b>Got</b>", styles["cell"]),
             Paragraph("<b>Short</b>", styles["cell"]),
-            Paragraph("<b>Reason &amp; suggested action</b>", styles["cell"]),
+            Paragraph("<b>Reason & suggested action</b>", styles["cell"]),
         ]]
         for issue in issues:
             short = issue.hours_requested - issue.hours_scheduled
@@ -483,13 +536,15 @@ def build_issues_pdf(semester):
         table.setStyle(TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), SLATE_900),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("GRID", (0, 0), (-1, -1), 0.4, SLATE_200),
+            ("GRID", (0, 0), (-1, -1), 0.8, SLATE_500),  # Thicker grid
             ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ("ALIGN", (3, 1), (5, -1), "CENTER"),
             ("TOPPADDING", (0, 0), (-1, -1), 4),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
             ("LEFTPADDING", (0, 0), (-1, -1), 5),
             ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#fff7ed")]),
+            ("BOX", (0, 0), (-1, -1), 1.2, SLATE_900),
+            ("INNERGRID", (0, 0), (-1, -1), 0.6, SLATE_200),
         ]))
         story.append(table)
         story.append(Spacer(1, 8))

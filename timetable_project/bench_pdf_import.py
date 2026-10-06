@@ -3,7 +3,8 @@ import os
 import sys
 import django
 
-sys.path.insert(0, r"C:\EDI Project\TimeTableGenerator\timetable_project")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "timetable_project.settings")
 django.setup()
 
@@ -15,7 +16,12 @@ from scheduler.pdf_import import build_payload, extract_document_title, extract_
 from scheduler.importer import import_college_data_from_dict
 from scheduler.solver import generate_timetable
 
-pdf_path = r"C:\Users\lenovo\AppData\Local\Temp\kilo\pdfout\messy_college.pdf"
+if os.environ.get("BENCH_DANGEROUS") != "1":
+    print("WARNING: This script DELETES all timetable data before running.")
+    print("Set environment variable BENCH_DANGEROUS=1 to confirm.")
+    sys.exit(1)
+
+pdf_path = os.path.join(BASE_DIR, "messy_college.pdf")
 subprocess.run([sys.executable, "make_sample_pdf.py", pdf_path], check=True,
                stdout=subprocess.DEVNULL)
 

@@ -4,7 +4,8 @@ import sys
 import time
 import django
 
-sys.path.insert(0, r"C:\EDI Project\TimeTableGenerator\timetable_project")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, BASE_DIR)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "timetable_project.settings")
 django.setup()
 
@@ -73,6 +74,11 @@ def build_payload(num_divisions):
 
 
 def run(num_divisions):
+    if os.environ.get("BENCH_DANGEROUS") != "1":
+        print("WARNING: This script DELETES all timetable data before running.")
+        print("Set environment variable BENCH_DANGEROUS=1 to confirm.")
+        return
+
     Assignment.objects.all().delete()
     TimetableEntry.objects.all().delete()
     SchedulerRun = SolverRun

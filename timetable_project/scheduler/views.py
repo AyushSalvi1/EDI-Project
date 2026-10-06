@@ -338,8 +338,9 @@ def my_timetable_view(request):
 
     weekly_load = 0
     hours_by_subject = {}
-    if teacher and semester:
-        weekly_load = sum(a.weekly_hours() for a in teacher.assignments.filter(semester=semester))
+    if semester:
+        if teacher:
+            weekly_load = sum(a.weekly_hours() for a in teacher.assignments.filter(semester=semester))
         for entry in entries:
             key = entry.assignment.subject.name
             hours_by_subject[key] = hours_by_subject.get(key, 0) + 1

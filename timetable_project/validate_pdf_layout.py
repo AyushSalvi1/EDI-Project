@@ -4,6 +4,10 @@ from collections import defaultdict
 
 import pdfplumber
 
+if len(sys.argv) < 2:
+    print("Usage: python validate_pdf_layout.py <pdf_path>")
+    sys.exit(1)
+
 path = sys.argv[1]
 
 with pdfplumber.open(path) as pdf:

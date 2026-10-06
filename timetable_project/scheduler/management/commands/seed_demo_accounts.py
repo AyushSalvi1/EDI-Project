@@ -25,7 +25,13 @@ STUDENT_PASSWORD = "Study@12345"
 class Command(BaseCommand):
     help = (
         "Create one admin, one teacher and one student demo login, each bound to a "
-        "record that already has timetable classes, so every role can be demonstrated."
+        "record that already has timetable classes, so every role can be demonstrated.\n\n"
+        "Required setup order:\n"
+        "  1. python manage.py migrate\n"
+        "  2. python manage.py import_college_data sample_college_data.json\n"
+        "  3. python manage.py generate_timetable\n"
+        "  4. python manage.py seed_demo_accounts\n"
+        "Running out of sequence will fail silently or confusingly."
     )
 
     def add_arguments(self, parser):

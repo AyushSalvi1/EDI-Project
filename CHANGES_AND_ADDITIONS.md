@@ -11,15 +11,15 @@
 Since the last commit the project gained **6 new features** (~3,700 lines across 25 new
 files) and grew by **~2,845 insertions** across 15 existing files. A full audit of every
 page and form uncovered **7 real bugs**, all of which are now fixed and covered by
-regression tests.
+regression tests. An additional **4 real bugs** were identified post-audit and remain open.
 
 | Metric | Before | After |
-|---|---|---|
+|---|---|
 | Application routes | 15 | 30 |
 | Python modules | 12 | 19 |
 | Test cases | 59 | 68 |
 | Test result | — | 68 passed, 0 failed |
-| Known open bugs | 7 | 0 |
+| Known open bugs | 0 | 4 |
 
 ---
 
@@ -246,6 +246,14 @@ Each new test names the symptom it prevents, so the defect cannot silently retur
 
 Change these passwords before any real deployment.
 
+**Required setup order before seeding accounts:**
+1. `python manage.py migrate`
+2. `python manage.py import_college_data sample_college_data.json`
+3. `python manage.py generate_timetable`
+4. `python manage.py seed_demo_accounts`
+
+Running `seed_demo_accounts` out of sequence fails silently or confusingly.
+
 **Current demo dataset:** *Fall Semester 2026* — 7 divisions, 11 subjects, 17 rooms,
 7 teachers, 20 assignments, 42 periods across 6 days. The solver schedules
 **64 of 64 requested hours with 0 unresolved issues.**
@@ -262,7 +270,36 @@ needed, `TimeSlot` should become semester-scoped.
 
 ---
 
-## 8. Repository Status
+## 8. Known Open Bugs
+
+These defects were identified after the initial 7-bug audit and have not been fixed
+at the time of writing.
+
+### Bug 8 — Student dashboard shows "Subjects 0" despite active timetable
+
+`my_timetable_view` (views.py) only populates `hours_by_subject` when the user is a
+teacher. For students the dict remains empty, so the summary card always displays 0
+subjects even though the grid correctly lists every class.
+
+### Bug 9 — Benchmark scripts use hardcoded absolute paths
+
+`bench_pdf_export.py`, `bench_pdf_import.py` and `bench_scale.py` contain paths
+such as `C:\EDI Project\TimeTableGenerator\timetable_project` and
+`C:\Users\lenovo\AppData\Local\Temp\kilo\...`. These scripts only run on the original
+developer's machine.
+
+### Bug 10 — Benchmark scripts delete database rows without confirmation
+
+`bench_pdf_export.py`, `bench_pdf_import.py` and `bench_scale.py` call
+`.all().delete()` on every model at startup. Running any of them against a database
+containing real data destroys it irreversibly.
+
+### Bug 11 — `validate_pdf_layout.py` crashes with no arguments
+
+The script reads `sys.argv[1]` unconditionally. Invoking it without a PDF path raises
+`IndexError` instead of printing usage.
+
+## 9. Repository Status
 
 All work is **uncommitted**. Nothing has been pushed. `db.sqlite3` is modified and
 contains the rebuilt demo dataset; consider whether it belongs in version control.
