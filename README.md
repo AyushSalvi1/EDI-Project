@@ -712,3 +712,4 @@ When explaining this project to evaluators or professors, keep these points in m
 - `Teacher`, `Room`, `Subject`, `TimeSlot` and `YearDivision` are **global**, not scoped to a college or semester. Importing a second college with different working hours reuses the existing period grid; the importer emits a warning naming the days it could not create.
 - The PDF importer reads **selectable text**. Scanned images must be OCR'd first, and the upload screen says so.
 - A division larger than every laboratory cannot be given its lab classes. The system reports this precisely rather than overbooking a room.
+"# restaurantos" 
