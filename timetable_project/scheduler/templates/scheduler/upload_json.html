@@ -84,9 +84,17 @@
     "period_duration_minutes": 60,
     "lunch_break": { "start_time": "13:00", "end_time": "14:00" }
   },
-  "years": [
-    { "year": 1, "number_of_divisions": 3, "strength_per_division": 60 }
-  ],
+   "years": [
+     { "year": 1, "number_of_divisions": 3, "strength_per_division": 60 },
+     {
+       "year": 2,
+       "divisions": [
+         { "division_label": "A", "division_prefix": "SY", "strength": 60 },
+         { "division_label": "B", "division_prefix": "SY", "strength": 60 },
+         { "division_label": "A", "division_prefix": "SEDA", "strength": 55 }
+       ]
+     }
+   ],
   "subjects": [
     { "id": "SUB1", "name": "Physics", "is_lab": false }
   ],
@@ -102,9 +110,11 @@
       "name": "Mr. Sharma",
       "max_hours_per_week": 24,
       "unavailable_slots": ["FRI-P4"],
-      "allocations": [
-        { "year": 1, "division": 1, "subject_id": "SUB1", "total_hours_for_semester": 64 }
-      ]
+       "allocations": [
+         { "year": 1, "division": 1, "subject_id": "SUB1", "total_hours_for_semester": 64 },
+         { "year": 2, "division_label": "A", "subject_id": "CS1", "total_hours_for_semester": 45 },
+         { "year": 2, "division_label": "A", "division_prefix": "SEDA", "subject_id": "CS1", "total_hours_for_semester": 45 }
+       ]
     }
   ]
 }</code></pre>

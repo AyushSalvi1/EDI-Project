@@ -54,9 +54,9 @@ class SemesterAdmin(admin.ModelAdmin):
 
 @admin.register(YearDivision)
 class YearDivisionAdmin(admin.ModelAdmin):
-    list_display = ("name", "year", "division_number", "strength")
+    list_display = ("name", "year", "division_number", "division_label", "division_prefix", "strength")
     list_filter = ("year",)
-    search_fields = ("name",)
+    search_fields = ("name", "division_label", "division_prefix")
 
 
 @admin.register(Subject)

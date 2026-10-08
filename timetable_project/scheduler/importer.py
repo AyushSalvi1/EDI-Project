@@ -2,6 +2,7 @@ import json
 import re
 from datetime import datetime
 from django.db import transaction
+from django.db.models import Max
 from django.core.exceptions import ValidationError
 
 from .models import (
@@ -14,6 +15,7 @@ from .models import (
     TeacherUnavailability,
     Assignment,
     generate_time_slots,
+    year_prefix_for,
 )
 
 
@@ -122,11 +124,12 @@ def validate_college_data(data: dict):
                 errors.append(f"In 'years'[{idx}]: 'year' must be an integer between 1 and 4.")
 
             if explicit is not None:
-                # Explicit numbering: divisions may be A/B/C, 1..6, or have gaps.
                 if not isinstance(explicit, list) or len(explicit) == 0:
-                    errors.append(f"In 'years'[{idx}]: 'divisions' must be a non-empty list.")
+                    errors.append(f"In 'years'[{idx}]': 'divisions' must be a non-empty list.")
                 else:
                     seen_numbers = set()
+                    seen_label_tuples = set()
+                    seen_labels = set()
                     local_ok = True
                     for d_idx, div in enumerate(explicit):
                         if not isinstance(div, dict):
@@ -134,29 +137,64 @@ def validate_college_data(data: dict):
                             local_ok = False
                             continue
                         d_num = div.get("division_number")
+                        d_label = div.get("division_label")
+                        d_prefix = div.get("division_prefix", "")
                         d_strength = div.get("strength", strength)
-                        if not isinstance(d_num, int) or d_num <= 0:
+                        if d_num is None and d_label is None:
+                            errors.append(
+                                f"In 'years'[{idx}].divisions[{d_idx}]: must provide either "
+                                f"'division_number' or 'division_label'."
+                            )
+                            local_ok = False
+                            continue
+                        if d_num is not None and (not isinstance(d_num, int) or d_num <= 0):
                             errors.append(
                                 f"In 'years'[{idx}].divisions[{d_idx}]: 'division_number' "
                                 f"must be a positive integer (got: {d_num!r})."
                             )
                             local_ok = False
                             continue
-                        if d_num in seen_numbers:
+                        if d_num is not None and d_num in seen_numbers:
                             errors.append(
-                                f"In 'years'[{idx}]: duplicate division number {d_num} for year {year_num}."
+                                f"In 'years'[{idx}']: duplicate division number {d_num} for year {year_num}."
                             )
                             local_ok = False
                             continue
-                        seen_numbers.add(d_num)
+                        if d_label is not None:
+                            if not isinstance(d_label, str) or not d_label.strip():
+                                errors.append(
+                                    f"In 'years'[{idx}].divisions[{d_idx}]: 'division_label' "
+                                    f"must be a non-empty string (got: {d_label!r})."
+                                )
+                                local_ok = False
+                                continue
+                            if not isinstance(d_prefix, str):
+                                errors.append(
+                                    f"In 'years'[{idx}].divisions[{d_idx}]: 'division_prefix' "
+                                    f"must be a string (got: {d_prefix!r})."
+                                )
+                                local_ok = False
+                                continue
+                            label_key = (d_prefix or year_prefix_for(year_num), d_label.strip())
+                            if label_key in seen_label_tuples:
+                                errors.append(
+                                    f"In 'years'[{idx}']: duplicate division_label '{d_label}' "
+                                    f"with prefix '{d_prefix or year_prefix_for(year_num)}' for year {year_num}."
+                                )
+                                local_ok = False
+                                continue
+                            seen_label_tuples.add(label_key)
+                            seen_labels.add(d_label.strip())
+                        if d_num is not None:
+                            seen_numbers.add(d_num)
                         if not isinstance(d_strength, int) or d_strength <= 0:
                             errors.append(
                                 f"In 'years'[{idx}].divisions[{d_idx}]: 'strength' must be "
                                 f"a positive integer (got: {d_strength!r})."
                             )
                             local_ok = False
-                    if isinstance(year_num, int) and local_ok:
-                        year_division_map[year_num] = set(seen_numbers)
+                    if isinstance(year_num, int):
+                        year_division_map[year_num] = seen_numbers | seen_labels | seen_label_tuples
                     continue
 
             if not isinstance(num_divs, int) or num_divs <= 0:
@@ -240,13 +278,29 @@ def validate_college_data(data: dict):
                         continue
                     a_year = a.get("year")
                     a_div = a.get("division")
+                    a_div_label = a.get("division_label")
+                    a_div_prefix = a.get("division_prefix")
                     a_subj = a.get("subject_id")
                     a_hours = a.get("total_hours_for_semester")
 
                     if a_year not in year_division_map:
                         errors.append(f"Teacher '{t_name}' allocation references undefined year '{a_year}'.")
-                    elif a_div not in year_division_map[a_year]:
-                        errors.append(f"Teacher '{t_name}' allocation references invalid division '{a_div}' for year '{a_year}'.")
+                    else:
+                        valid = year_division_map[a_year]
+                        div_ok = False
+                        if a_div is not None and a_div in valid:
+                            div_ok = True
+                        if not div_ok and a_div_label is not None:
+                            if a_div_prefix is not None:
+                                div_ok = (a_div_prefix, a_div_label.strip()) in valid
+                            else:
+                                default_prefix = year_prefix_for(a_year) if isinstance(a_year, int) else ""
+                                div_ok = (default_prefix, a_div_label.strip()) in valid or a_div_label.strip() in valid
+                        if not div_ok:
+                            errors.append(
+                                f"Teacher '{t_name}' allocation references invalid division "
+                                f"'{a_div or a_div_label}' for year '{a_year}'."
+                            )
 
                     if a_subj not in subject_ids:
                         errors.append(f"Teacher '{t_name}' allocation references undefined subject_id '{a_subj}'.")
@@ -290,18 +344,42 @@ def import_college_data_from_dict(data: dict) -> dict:
         slot_map = {(s.day.upper(), s.period_number): s for s in TimeSlot.objects.all()}
 
         # 3. Generate YearDivisions
-        division_lookup = {}  # (year, division_num) -> YearDivision
+        division_lookup = {}  # (year, division_key) -> YearDivision
         created_divisions = []
         for y_entry in data["years"]:
             explicit = y_entry.get("divisions")
             if explicit:
                 for d_entry in explicit:
-                    obj, _ = YearDivision.objects.update_or_create(
-                        year=y_entry["year"],
-                        division_number=d_entry["division_number"],
-                        defaults={"strength": d_entry.get("strength", y_entry.get("strength_per_division", 60))},
-                    )
+                    div_num = d_entry.get("division_number")
+                    div_label = d_entry.get("division_label", "")
+                    div_prefix = d_entry.get("division_prefix", "")
+                    defaults = {
+                        "strength": d_entry.get("strength", y_entry.get("strength_per_division", 60)),
+                    }
+                    if div_label:
+                        defaults["division_label"] = div_label
+                    if div_prefix:
+                        defaults["division_prefix"] = div_prefix
+                    if div_num is not None:
+                        obj, _ = YearDivision.objects.update_or_create(
+                            year=y_entry["year"],
+                            division_number=div_num,
+                            defaults=defaults,
+                        )
+                    else:
+                        max_num = YearDivision.objects.filter(
+                            year=y_entry["year"]
+                        ).aggregate(models_max=Max("division_number"))["models_max"]
+                        div_num = (max_num or 0) + 1
+                        obj, _ = YearDivision.objects.update_or_create(
+                            year=y_entry["year"],
+                            division_number=div_num,
+                            defaults=defaults,
+                        )
                     division_lookup[(obj.year, obj.division_number)] = obj
+                    if obj.division_label:
+                        division_lookup[(obj.year, obj.division_prefix, obj.division_label)] = obj
+                        division_lookup[(obj.year, obj.division_label)] = obj
                     created_divisions.append(obj)
             else:
                 divs = YearDivision.generate_for_year(
@@ -311,6 +389,9 @@ def import_college_data_from_dict(data: dict) -> dict:
                 )
                 for local_division_number, d in enumerate(divs, start=1):
                     division_lookup[(d.year, local_division_number)] = d
+                    if d.division_label:
+                        division_lookup[(d.year, d.division_prefix, d.division_label)] = d
+                        division_lookup[(d.year, d.division_label)] = d
                     created_divisions.append(d)
 
         # 4. Create Subjects
@@ -366,12 +447,26 @@ def import_college_data_from_dict(data: dict) -> dict:
 
             # Allocations -> Assignments
             for a_entry in t_entry.get("allocations", []):
-                div_obj = division_lookup.get((a_entry["year"], a_entry["division"]))
+                a_year = a_entry["year"]
+                a_div = a_entry.get("division")
+                a_div_label = a_entry.get("division_label")
+                a_div_prefix = a_entry.get("division_prefix")
+                div_obj = None
+                if a_div is not None:
+                    div_obj = division_lookup.get((a_year, a_div))
+                if div_obj is None and a_div_label is not None:
+                    if a_div_prefix:
+                        div_obj = division_lookup.get((a_year, a_div_prefix, a_div_label))
+                    else:
+                        default_prefix = year_prefix_for(a_year) if isinstance(a_year, int) else ""
+                        div_obj = division_lookup.get((a_year, default_prefix, a_div_label))
+                        if div_obj is None:
+                            div_obj = division_lookup.get((a_year, a_div_label))
                 subj_obj = subject_lookup.get(a_entry["subject_id"])
                 if not div_obj:
                     raise ValidationError(
                         f"Teacher '{t_entry['name']}' allocation references "
-                        f"unresolved division {a_entry['year']}-{a_entry['division']}."
+                        f"unresolved division {a_year}-{a_div or a_div_label}."
                     )
                 if not subj_obj:
                     raise ValidationError(

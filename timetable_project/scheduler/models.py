@@ -15,6 +15,14 @@ def ordinal(n: int) -> str:
     return f"{n}{suffix}"
 
 
+YEAR_PREFIXES = {1: "FY", 2: "SY", 3: "TY", 4: "LY"}
+
+
+def year_prefix_for(year: int) -> str:
+    """Return the default display prefix for a given year of study."""
+    return YEAR_PREFIXES.get(year, f"{year}Y")
+
+
 # ===========================================================================
 # 1. Semester
 # ===========================================================================
@@ -40,6 +48,14 @@ class Semester(models.Model):
 class YearDivision(models.Model):
     year = models.IntegerField(help_text="Year of study (1-4)")
     division_number = models.IntegerField(help_text="Sequential division number (1, 2, ...)")
+    division_label = models.CharField(
+        max_length=20, default="",
+        help_text="Display label for the division (e.g. A, B, N). Defaults to the division number.",
+    )
+    division_prefix = models.CharField(
+        max_length=10, default="",
+        help_text="Name prefix derived from year (SY, TY, SEDA, ...). Auto-filled if blank.",
+    )
     strength = models.IntegerField(default=60)
     name = models.CharField(max_length=100, blank=True)
 
@@ -48,27 +64,42 @@ class YearDivision(models.Model):
         unique_together = ('year', 'division_number')
 
     def save(self, *args, **kwargs):
-        self.name = f"{ordinal(self.year)} Year - Division {self.division_number}"
+        if not self.division_label:
+            self.division_label = str(self.division_number)
+        if not self.division_prefix:
+            self.division_prefix = year_prefix_for(self.year)
+        self.name = f"{self.division_prefix} {self.division_label}"
         super().save(*args, **kwargs)
 
     def __str__(self):
-        return self.name or f"{ordinal(self.year)} Year - Division {self.division_number}"
+        return self.name or f"{self.division_prefix} {self.division_label}"
 
     @staticmethod
-    def generate_for_year(year: int, number_of_divisions: int, strength: int):
+    def generate_for_year(year: int, number_of_divisions: int, strength: int,
+                          division_labels=None, division_prefix=""):
         """
         Auto-creates that many YearDivision rows, numbered sequentially,
         continuing from however many already exist for that year.
+
+        *division_labels* may be a list of display labels (e.g. ["A", "B", ...])
+        whose length must equal *number_of_divisions*. When provided, each label
+        is paired with a created division; when omitted the division number is
+        used as the label.
         """
         existing_count = YearDivision.objects.filter(year=year).count()
         created_divisions = []
         for i in range(1, number_of_divisions + 1):
             div_num = existing_count + i
-            division = YearDivision.objects.create(
-                year=year,
-                division_number=div_num,
-                strength=strength
-            )
+            kwargs = {
+                "year": year,
+                "division_number": div_num,
+                "strength": strength,
+            }
+            if division_labels:
+                kwargs["division_label"] = division_labels[i - 1]
+            if division_prefix:
+                kwargs["division_prefix"] = division_prefix
+            division = YearDivision.objects.create(**kwargs)
             created_divisions.append(division)
         return created_divisions
 
@@ -552,7 +583,7 @@ class DivisionPreference(models.Model):
     """
     An optional per-division override of the college week.
 
-    Lets an administrator say "2nd Year - Division 1 works Monday to Wednesday and
+    Lets an administrator say "SY A works Monday to Wednesday and
     uses periods 1 to 4" without changing anyone else's timetable.
     """
 

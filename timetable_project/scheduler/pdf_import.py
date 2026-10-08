@@ -20,6 +20,8 @@ from datetime import datetime
 
 import pdfplumber
 
+from .models import year_prefix_for
+
 MAX_TABLES = 60
 MAX_PREVIEW_ROWS = 4000
 
@@ -66,7 +68,7 @@ ROLE_FIELDS = {
         "max_hours": ["max hours", "max hours per week", "maximum hours", "weekly limit",
                       "max hours/week", "contract hours", "load limit", "max load",
                       "max hrs", "max hrs week", "hrs per week", "weekly max", "max load hrs"],
-        "year": ["year", "yr", "year of study", "standard", "semester year", "class"],
+         "year": ["year", "yr", "year of study", "standard", "semester year", "class"],
         "division": ["division", "div", "division no", "batch", "section", "division number",
                      "class division"],
         "subject_id": ["subject code", "subject id", "course code", "code", "paper code",
@@ -879,10 +881,14 @@ def build_payload(tables, overrides=None, document_title=""):
             subject_name = _cell(row, mapping, "subject_name")
             subject_code = _cell(row, mapping, "subject_id")
             year = parse_int(_cell(row, mapping, "year"), default=None)
-            division = parse_int(_cell(row, mapping, "division"), default=None)
+            div_raw = _cell(row, mapping, "division")
+            division = parse_int(div_raw, default=None)
+            div_label = div_raw.strip() if div_raw and division is None else None
             hours = parse_int(_cell(row, mapping, "total_hours"), default=None)
 
-            if not teacher_name or not subject_name or year is None or division is None:
+            if not teacher_name or not subject_name or year is None:
+                continue
+            if division is None and not div_label:
                 continue
             if hours is None or hours <= 0:
                 continue
@@ -894,6 +900,7 @@ def build_payload(tables, overrides=None, document_title=""):
                 "subject_name": subject_name,
                 "year": year,
                 "division": division,
+                "div_label": div_label,
                 "hours": hours,
                 "is_lab": is_lab_flag,
             })
@@ -957,22 +964,43 @@ def build_payload(tables, overrides=None, document_title=""):
         if year < 1 or year > 4:
             warnings.append(f"Year {year} is outside the supported range 1-4 and was skipped.")
             continue
-        divisions = sorted({r["division"] for r in allocation_records if r["year"] == year})
+        year_records = [r for r in allocation_records if r["year"] == year]
+        numeric_divisions = sorted({r["division"] for r in year_records if r["division"] is not None})
+        labeled_divisions = sorted({r["div_label"] for r in year_records if r["div_label"] is not None})
         strengths = division_strengths.get(year) or {default_strength}
+        div_list = [
+            {"division_number": d, "strength": max(strengths)} for d in numeric_divisions
+        ]
+        default_prefix = year_prefix_for(year)
+        for label in labeled_divisions:
+            div_list.append({"division_label": label, "division_prefix": default_prefix, "strength": max(strengths)})
         years.append({
             "year": year,
-            "divisions": [
-                {"division_number": d, "strength": max(strengths)} for d in divisions
-            ],
+            "divisions": div_list,
             "strength_per_division": max(strengths),
         })
 
     valid_divisions = {
-        y["year"]: {d["division_number"] for d in y["divisions"]} for y in years
+        y["year"]: set() for y in years
     }
+    valid_labels = {
+        y["year"]: set() for y in years
+    }
+    for y in years:
+        for d in y["divisions"]:
+            if "division_number" in d:
+                valid_divisions[y["year"]].add(d["division_number"])
+            elif "division_label" in d:
+                prefix = d.get("division_prefix", year_prefix_for(y["year"]))
+                valid_labels[y["year"]].add((prefix, d["division_label"]))
+                valid_labels[y["year"]].add(d["division_label"])
     allocation_records = [
         r for r in allocation_records
-        if r["division"] in valid_divisions.get(r["year"], set())
+        if (r["division"] is not None and r["division"] in valid_divisions.get(r["year"], set()))
+        or (r["div_label"] is not None and (
+            (r.get("division_prefix"), r["div_label"]) in valid_labels.get(r["year"], set())
+            or r["div_label"] in valid_labels.get(r["year"], set())
+        ))
     ]
 
     # ---------------- Teachers --------------------------------------------
@@ -997,20 +1025,26 @@ def build_payload(tables, overrides=None, document_title=""):
             workload = sum(r["hours"] for r in records)
             max_hours = min(40, max(max_hours_default, workload))
 
+        teacher_allocations = []
+        for r in records:
+            alloc = {
+                "year": r["year"],
+                "subject_id": r["subject_id"],
+                "total_hours_for_semester": r["hours"],
+            }
+            if r["division"] is not None:
+                alloc["division"] = r["division"]
+            else:
+                alloc["division_label"] = r["div_label"]
+                alloc["division_prefix"] = year_prefix_for(r["year"]) if isinstance(r["year"], int) else ""
+            teacher_allocations.append(alloc)
+
         teachers.append({
             "id": slugify_subject(teacher_name, f"T{len(teachers) + 1}")[:24],
             "name": teacher_name,
             "max_hours_per_week": int(max_hours),
             "unavailable_slots": sorted(unavail),
-            "allocations": [
-                {
-                    "year": r["year"],
-                    "division": r["division"],
-                    "subject_id": r["subject_id"],
-                    "total_hours_for_semester": r["hours"],
-                }
-                for r in records
-            ],
+            "allocations": teacher_allocations,
         })
 
     # ---------------- Rooms ------------------------------------------------
