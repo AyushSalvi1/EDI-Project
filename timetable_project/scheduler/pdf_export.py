@@ -34,6 +34,7 @@ from .models import (
     TimetableEntry,
     TimeSlot,
     YearDivision,
+    YEAR_PREFIXES,
 )
 
 # Path to VIT logo
@@ -471,24 +472,55 @@ def build_teacher_load_pdf(semester):
     return buffer
 
 
+def build_year_group_issues_pdf(semester, year_group):
+    """
+    One PDF containing only the conflicts for a single year group.
+
+    *year_group* is the display prefix, e.g. "SY" or "TY". This is what the
+    Issue Centre shows while an administrator resolves conflicts, so each year
+    can be reviewed as its own document rather than paging through one file.
+    """
+    return _build_issues_pdf(semester, year_group=year_group)
+
+
 def build_issues_pdf(semester):
     """Report of every class that could not be fully scheduled, with reasons."""
+    return _build_issues_pdf(semester, year_group=None)
+
+
+def _build_issues_pdf(semester, year_group=None):
+    """
+    Report of every class that could not be fully scheduled, with reasons.
+
+    When *year_group* is given (e.g. "SY" or "TY") only issues belonging to
+    divisions of that year are listed, and the title reflects the filter. This
+    lets an administrator pull a separate PDF per year group while resolving
+    conflicts, rather than paging through one monolithic report.
+    """
+    qs = SchedulingIssue.objects.filter(semester=semester).select_related(
+        "assignment__division", "assignment__subject", "assignment__teacher"
+    )
+    if year_group:
+        from .models import YEAR_PREFIXES
+        target_year = {v: k for k, v in YEAR_PREFIXES.items()}.get(year_group)
+        if target_year is None:
+            raise ValueError(f"Unknown year group: {year_group}")
+        qs = qs.filter(assignment__division__year=target_year)
+
+    issues = list(qs.order_by(
+        "assignment__division__year", "assignment__division__division_number"
+    ))
+
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=landscape(A4),
         leftMargin=12 * mm, rightMargin=12 * mm, topMargin=12 * mm, bottomMargin=16 * mm,
-        title=f"{semester.name} Scheduling Issues",
+        title=f"{semester.name} Scheduling Issues" + (f" - {year_group}" if year_group else ""),
     )
     styles = _styles()
 
-    issues = list(
-        SchedulingIssue.objects.filter(semester=semester)
-        .select_related("assignment__division", "assignment__subject", "assignment__teacher")
-        .order_by("assignment__division__year", "assignment__division__division_number")
-    )
-
     story = []
-    
+
     # Add VIT logo
     if os.path.exists(VIT_LOGO_PATH):
         logo = Image(VIT_LOGO_PATH, width=80*mm, height=32*mm)
@@ -496,8 +528,11 @@ def build_issues_pdf(semester):
         story.append(logo)
         story.append(Spacer(1, 6))
 
+    title = "SCHEDULING ISSUE REPORT"
+    if year_group:
+        title = f"{year_group} YEAR SCHEDULING ISSUES"
     story.extend([
-        Paragraph("SCHEDULING ISSUE REPORT", styles["title"]),
+        Paragraph(title, styles["title"]),
         Paragraph(_escape(semester.name), styles["subtitle"]),
         Spacer(1, 8),
     ])

@@ -25,6 +25,22 @@
           {% endfor %}
         </select>
       </form>
+      {% if selected_semester %}
+      <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mr-1">Export</span>
+        <a href="{% url 'scheduler:export_issues_pdf' %}?semester_id={{ selected_semester.id }}"
+           class="btn-ghost !text-xs !py-1.5" title="All divisions">
+          <i class="fa-solid fa-file-pdf text-rose-500"></i> All Issues
+        </a>
+        {% for prefix in year_group_prefixes %}
+        <a href="{% url 'scheduler:export_year_group_issues_pdf' prefix %}?semester_id={{ selected_semester.id }}"
+           class="btn-ghost !text-xs !py-1.5"
+           title="{{ prefix }} year conflicts only">
+          <i class="fa-solid fa-file-pdf text-rose-500"></i> {{ prefix }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if issues %}
       <form method="POST" action="{% url 'scheduler:find_fixes' %}" class="js-confirm"
             data-confirm="Analyse every issue and suggest fixes? This runs the solver several times in a sandbox and may take a few seconds. Nothing will be changed.">

@@ -42,6 +42,8 @@ urlpatterns = [
     path('export/full.pdf', views.export_full_pdf_view, name='export_full_pdf'),
     path('export/faculty.pdf', views.export_faculty_pdf_view, name='export_faculty_pdf'),
     path('export/issues.pdf', views.export_issues_pdf_view, name='export_issues_pdf'),
+    path('export/issues/<str:year_group>.pdf', views.export_year_group_issues_pdf_view,
+         name='export_year_group_issues_pdf'),
     path('export/division/<int:division_id>.pdf', views.export_division_pdf_view,
          name='export_division_pdf'),
 

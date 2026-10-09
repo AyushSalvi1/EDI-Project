@@ -23,6 +23,19 @@ def year_prefix_for(year: int) -> str:
     return YEAR_PREFIXES.get(year, f"{year}Y")
 
 
+def year_group_prefixes_with_issues(semester):
+    """
+    Return the display prefixes (e.g. ``['SY', 'TY']``) for year groups that
+    have at least one unresolved scheduling issue in *semester*.
+    """
+    years = (
+        SchedulingIssue.objects.filter(semester=semester)
+        .values_list("assignment__division__year", flat=True)
+        .distinct()
+    )
+    return [year_prefix_for(y) for y in sorted(years)]
+
+
 # ===========================================================================
 # 1. Semester
 # ===========================================================================

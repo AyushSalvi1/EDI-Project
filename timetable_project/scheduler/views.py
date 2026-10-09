@@ -31,6 +31,7 @@ from .models import (
     DivisionPreference,
     DAY_CHOICES,
     DAY_ORDER,
+    year_group_prefixes_with_issues,
 )
 from .edits import delete_entry, move_entry, swap_entries, available_rooms_for
 from .importer import import_college_data_from_json, import_college_data_from_dict
@@ -61,6 +62,7 @@ from .pdf_export import (
     build_full_institution_pdf,
     build_issues_pdf,
     build_teacher_load_pdf,
+    build_year_group_issues_pdf,
 )
 from .roles import (
     STUDENT_GROUP,
@@ -821,6 +823,22 @@ def export_issues_pdf_view(request):
 
 
 @admin_required
+def export_year_group_issues_pdf_view(request, year_group):
+    """One PDF containing only the conflicts for a single year group (SY, TY, ...)."""
+    semester_id = request.GET.get("semester_id")
+    semester = (get_object_or_404(Semester, pk=semester_id)
+                if semester_id else Semester.objects.order_by("-start_date").first())
+    if semester is None:
+        messages.error(request, "Create a semester first by importing college data.")
+        return redirect("scheduler:upload_json")
+
+    return _pdf_response(
+        build_year_group_issues_pdf(semester, year_group),
+        f"{semester.name.replace(' ', '_')}_{year_group}_issues.pdf",
+    )
+
+
+@admin_required
 def delete_entry_view(request, pk):
     """Remove one scheduled class from the timetable."""
     entry = get_object_or_404(
@@ -993,6 +1011,9 @@ def issue_centre_view(request):
             round(hours_scheduled / hours_requested * 100) if hours_requested else 100
         ),
         "unread_count": unread_count(request.user),
+        "year_group_prefixes": (
+            year_group_prefixes_with_issues(semester) if semester else []
+        ),
     }
     return render(request, "scheduler/issue_centre.html", context)
 
