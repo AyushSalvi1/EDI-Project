@@ -6,22 +6,27 @@
 <div class="space-y-6">
 
   <!-- Header & Controls -->
-  <div class="card p-4 sm:p-6 no-print">
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+  <div class="card p-5 sm:p-7 no-print bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
       <div>
-        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-          <i class="fa-solid fa-table-cells text-indigo-600"></i> Division Timetable
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+            Interactive Schedule Grid
+          </span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
+          <i class="fa-solid fa-table-cells text-indigo-600 dark:text-indigo-400"></i> Division Timetables
         </h1>
-        <p class="text-xs sm:text-sm text-slate-500 mt-1">
-          Select a division to inspect its conflict-free weekly schedule across periods and working days.
+        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl leading-relaxed">
+          Inspect conflict-free weekly schedules across periods and days. Click any scheduled class to view instant details or export directly to your calendar.
         </p>
       </div>
 
-      <!-- Filter Controls -->
+      <!-- Filter Controls & Actions -->
       <form method="GET" class="flex flex-wrap items-center gap-3">
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Semester</label>
-          <select name="semester_id" onchange="this.form.submit()" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Semester</label>
+          <select name="semester_id" onchange="this.form.submit()" class="rounded-xl border border-slate-300 dark:border-slate-700 px-3.5 py-2 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-indigo-500 outline-none shadow-xs">
             {% for s in semesters %}
             <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>
               {{ s.name }}
@@ -31,8 +36,8 @@
         </div>
 
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Year & Division</label>
-          <select name="division_id" onchange="this.form.submit()" class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white font-semibold focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Year & Division</label>
+          <select name="division_id" onchange="this.form.submit()" class="rounded-xl border border-slate-300 dark:border-slate-700 px-3.5 py-2 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-bold focus:ring-2 focus:ring-indigo-500 outline-none shadow-xs">
             {% for d in divisions %}
             <option value="{{ d.id }}" {% if selected_division and selected_division.id == d.id %}selected{% endif %}>
               {{ d.name }} (Cap: {{ d.strength }})
@@ -45,25 +50,25 @@
 
         <div class="pt-5 flex flex-wrap gap-2">
           {% if selected_division and selected_semester %}
+          <!-- iCalendar Sync -->
+          <a href="{% url 'scheduler:export_ical' %}?division_id={{ selected_division.id }}&semester_id={{ selected_semester.id }}"
+             class="btn-ghost !text-xs !py-2 text-indigo-600 dark:text-indigo-400 hover:border-indigo-300"
+             title="Add to Google Calendar, Apple Calendar, or Outlook">
+            <i class="fa-solid fa-calendar-plus text-indigo-500"></i> Sync (.ics)
+          </a>
+
+          <!-- PDF Exports -->
           <a href="{% url 'scheduler:export_division_pdf' selected_division.id %}?semester_id={{ selected_semester.id }}"
-             class="btn-ghost !text-xs !py-1.5">
-            <i class="fa-solid fa-file-pdf text-rose-500"></i> This Division
+             class="btn-ghost !text-xs !py-2">
+            <i class="fa-solid fa-file-pdf text-rose-500"></i> Division PDF
           </a>
           <a href="{% url 'scheduler:export_full_pdf' %}?semester_id={{ selected_semester.id }}"
-             class="btn-ghost !text-xs !py-1.5">
-            <i class="fa-solid fa-file-pdf text-rose-500"></i> All Divisions
-          </a>
-          <a href="{% url 'scheduler:export_faculty_pdf' %}?semester_id={{ selected_semester.id }}"
-             class="btn-ghost !text-xs !py-1.5">
-            <i class="fa-solid fa-users text-rose-500"></i> Faculty Load
-          </a>
-          <a href="{% url 'scheduler:export_issues_pdf' %}?semester_id={{ selected_semester.id }}"
-             class="btn-ghost !text-xs !py-1.5">
-            <i class="fa-solid fa-triangle-exclamation text-amber-500"></i> Issues
+             class="btn-ghost !text-xs !py-2">
+            <i class="fa-solid fa-file-pdf text-rose-500"></i> Full College PDF
           </a>
           {% endif %}
-          <button type="button" onclick="window.print()" class="btn-ghost !text-xs !py-1.5">
-            <i class="fa-solid fa-print"></i> Print / PDF
+          <button type="button" onclick="window.print()" class="btn-ghost !text-xs !py-2">
+            <i class="fa-solid fa-print"></i> Print
           </button>
         </div>
       </form>
@@ -72,32 +77,44 @@
 
   <!-- Division Title Banner -->
   {% if selected_division %}
-  <div class="flex items-center justify-between bg-indigo-900 text-white p-4 rounded-xl shadow-sm">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-lg bg-indigo-700/60 flex items-center justify-center font-bold text-lg">
+  <div class="flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-lg border border-indigo-900/40">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-2xl bg-indigo-600/40 border border-indigo-400/30 flex items-center justify-center font-extrabold text-xl shadow-inner text-indigo-200 font-display">
         Y{{ selected_division.year }}
       </div>
       <div>
-        <h2 class="text-lg font-bold">{{ selected_division.name }}</h2>
-        <p class="text-xs text-indigo-200">
-          Student Strength: {{ selected_division.strength }} &bull; Semester: {{ selected_semester.name }}
+        <div class="flex items-center gap-2">
+          <h2 class="text-xl font-bold tracking-tight">{{ selected_division.name }}</h2>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/20">
+            Strength: {{ selected_division.strength }} Students
+          </span>
+        </div>
+        <p class="text-xs text-indigo-300/80 mt-0.5 font-medium">
+          Semester: {{ selected_semester.name }} &bull; Conflict-free schedule verified by Google OR-Tools CP-SAT
         </p>
       </div>
     </div>
-    <div class="no-print">
-      <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ selected_semester.id }}" class="text-xs bg-indigo-800 hover:bg-indigo-700 text-indigo-100 px-3 py-1.5 rounded-lg font-medium transition">
-        <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Re-solve
+    
+    <div class="no-print flex items-center gap-2">
+      <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ selected_semester.id }}" 
+         class="btn-primary !text-xs !py-2 shadow-indigo-600/30">
+        <i class="fa-solid fa-wand-magic-sparkles"></i> Re-solve with Solver
       </a>
     </div>
   </div>
 
   <!-- Weekly Timetable Grid Table (Day x Period) -->
   {% include "scheduler/_timetable_grid.html" %}
+
   {% else %}
-  <div class="card p-12 text-center">
-    <i class="fa-solid fa-calendar-xmark text-slate-300 text-4xl mb-3"></i>
-    <p class="text-sm font-semibold text-slate-700">No Division Selected</p>
-    <p class="text-xs text-slate-400 mt-1">Please import college data to generate division timetables.</p>
+  <div class="card p-16 text-center">
+    <div class="w-16 h-16 rounded-3xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-4">
+      <i class="fa-solid fa-calendar-xmark"></i>
+    </div>
+    <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">No Division Selected</h3>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+      Please import college data or select an active division to generate and view schedules.
+    </p>
   </div>
   {% endif %}
 

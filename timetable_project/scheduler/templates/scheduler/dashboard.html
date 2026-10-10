@@ -3,169 +3,200 @@
 {% block title %}Dashboard | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
-<div class="space-y-6">
+<div class="space-y-7">
 
-  <!-- Hero Header -->
-  <div class="card p-6 sm:p-8 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white relative overflow-hidden">
+  <!-- Hero Header Banner with Visual Atmosphere -->
+  <div class="card p-6 sm:p-9 bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-900 text-white relative overflow-hidden border border-indigo-900/40 shadow-xl">
+    <!-- Ambient decorative glow -->
+    <div class="absolute -right-20 -top-20 w-80 h-80 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute right-40 -bottom-20 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
     <div class="relative z-10 max-w-3xl">
-      <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/30 text-indigo-200 border border-indigo-400/20 mb-3">
-        <i class="fa-solid fa-microchip"></i> Constraint Programming Engine
-      </span>
-      <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight">Automatic Timetable Generator</h1>
-      <p class="mt-2 text-sm sm:text-base text-slate-300 leading-relaxed">
-        Import the college's own timetable PDF or a JSON file. The Google OR-Tools CP-SAT
-        solver computes a conflict-free schedule across all 1st to 4th year divisions,
-        and tells you exactly what it could not schedule &mdash; with fixes you can approve.
+      <div class="flex items-center gap-2 mb-3">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 backdrop-blur-md">
+          <i class="fa-solid fa-microchip text-indigo-400"></i> Constraint Programming Engine v2.0
+        </span>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 backdrop-blur-md">
+          <i class="fa-solid fa-circle-check text-emerald-400"></i> Zero Conflict Solver
+        </span>
+      </div>
+
+      <h1 class="text-3xl sm:text-4xl font-extrabold tracking-tight font-display text-white">
+        Academic Timetable Generator
+      </h1>
+      <p class="mt-2.5 text-sm sm:text-base text-slate-300 leading-relaxed max-w-2xl">
+        Import your institution's PDF or JSON curriculum. Google OR-Tools CP-SAT
+        instantly solves hard &amp; soft constraints across 1st&ndash;4th year divisions, ensuring conflict-free faculty, room, and student schedules.
       </p>
 
-      <div class="mt-6 flex flex-wrap gap-3">
-        <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary">
+      <div class="mt-7 flex flex-wrap items-center gap-3">
+        <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary !py-2.5 !px-5 text-sm">
           <i class="fa-solid fa-file-pdf"></i> Import from PDF
         </a>
-        <a href="{% url 'scheduler:issue_centre' %}" class="btn-secondary">
-          <i class="fa-solid fa-triangle-exclamation"></i> Issues &amp; Fixes
+        <a href="{% url 'scheduler:generate_timetable' %}{% if active_semester %}?semester_id={{ active_semester.id }}{% endif %}" 
+           class="btn-secondary !py-2.5 !px-5 text-sm">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> Run CP-SAT Solver
         </a>
-        <a href="{% url 'scheduler:timetable_view' %}" class="btn-ghost !bg-slate-800/80 !text-white !border-slate-700 hover:!bg-slate-700">
+        <a href="{% url 'scheduler:timetable_view' %}{% if active_semester %}?semester_id={{ active_semester.id }}{% endif %}" 
+           class="btn-ghost !bg-slate-800/80 !text-white !border-slate-700/80 hover:!bg-slate-700 !py-2.5 !px-5 text-sm">
           <i class="fa-solid fa-table-cells"></i> View Timetables
         </a>
       </div>
     </div>
   </div>
 
-  <!-- Attention banner: the one thing that most needs doing -->
+  <!-- Attention / Urgent Action Banner -->
   {% if active_semester %}
-  <div class="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4
-    {% if total_issues %}border-l-amber-500 bg-amber-50/40
-    {% elif pending_proposals %}border-l-indigo-500 bg-indigo-50/40
-    {% else %}border-l-emerald-500 bg-emerald-50/40{% endif %}">
-    <div class="flex items-start gap-3 min-w-0">
-      <span class="w-11 h-11 rounded-xl grid place-items-center text-white shrink-0
-        {% if total_issues %}bg-amber-500
-        {% elif pending_proposals %}bg-indigo-600
-        {% else %}bg-emerald-500{% endif %}">
+  <div class="card p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-l-4
+    {% if total_issues %}border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/20
+    {% elif pending_proposals %}border-l-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20
+    {% else %}border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20{% endif %}">
+    <div class="flex items-start gap-4 min-w-0">
+      <span class="w-12 h-12 rounded-2xl grid place-items-center text-white shrink-0 shadow-md text-lg
+        {% if total_issues %}bg-amber-500 shadow-amber-500/25
+        {% elif pending_proposals %}bg-indigo-600 shadow-indigo-600/25
+        {% else %}bg-emerald-500 shadow-emerald-500/25{% endif %}">
         <i class="fa-solid
           {% if total_issues %}fa-triangle-exclamation
           {% elif pending_proposals %}fa-lightbulb
           {% else %}fa-circle-check{% endif %}"></i>
       </span>
       <div class="min-w-0">
-        <p class="text-sm font-extrabold text-slate-900">
+        <p class="text-base font-extrabold text-slate-900 dark:text-white">
           {% if total_issues %}
-            {{ total_issues }} issue{{ total_issues|pluralize }} need attention
+            {{ total_issues }} scheduling issue{{ total_issues|pluralize }} require attention
           {% elif pending_proposals %}
-            {{ pending_proposals }} suggested fix{{ pending_proposals|pluralize }} waiting for your approval
+            {{ pending_proposals }} verified fix{{ pending_proposals|pluralize }} awaiting your approval
           {% else %}
-            Everything is scheduled and nothing needs approval
+            All academic slots scheduled with zero conflicts!
           {% endif %}
         </p>
-        <p class="text-[11px] text-slate-600 mt-0.5">
+        <p class="text-xs text-slate-600 dark:text-slate-400 mt-1">
           {% if total_issues %}
-            {{ total_entries }} of {{ hours_requested }} weekly hours placed ({{ coverage_percent }}%).
-            Open the Issue Centre to see verified fixes.
+            {{ total_entries }} of {{ hours_requested }} weekly hours successfully placed ({{ coverage_percent }}% coverage).
+            Visit Issue Centre to apply auto-generated conflict fixes.
           {% elif pending_proposals %}
-            Approve a fix and everyone affected is notified automatically.
+            Review proven sandboxed changes. Stakeholders are notified automatically upon approval.
           {% else %}
-            {{ total_entries }} classes placed for {{ active_semester.name }} with no conflicts.
+            {{ total_entries }} course offerings placed for {{ active_semester.name }}.
           {% endif %}
         </p>
       </div>
     </div>
     {% if total_issues or pending_proposals %}
-    <a href="{% url 'scheduler:issue_centre' %}" class="btn-primary !text-xs !py-2 shrink-0">
-      {% if pending_proposals and not total_issues %}Review Fixes{% else %}Review Issues{% endif %}
+    <a href="{% url 'scheduler:issue_centre' %}" class="btn-primary !text-xs !py-2.5 shrink-0">
+      {% if pending_proposals and not total_issues %}Review Fixes{% else %}Open Issue Centre{% endif %}
       <i class="fa-solid fa-arrow-right"></i>
     </a>
     {% else %}
-    <a href="{% url 'scheduler:capacity_report' %}" class="btn-ghost !text-xs !py-2 shrink-0">
-      Capacity Report <i class="fa-solid fa-arrow-right"></i>
+    <a href="{% url 'scheduler:capacity_report' %}" class="btn-ghost !text-xs !py-2.5 shrink-0">
+      Room Capacity Analysis <i class="fa-solid fa-arrow-right"></i>
     </a>
     {% endif %}
   </div>
   {% endif %}
 
-  <!-- Key Statistics Grid -->
+  <!-- Key Analytics Metric Counters Grid -->
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-    <div class="card p-4 text-center">
-      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Divisions</div>
-      <div class="mt-2 text-2xl font-bold text-slate-800">{{ total_divisions }}</div>
-      <div class="mt-1 text-xs text-slate-400">Years 1–4</div>
+    <div class="card p-4 text-center group hover:border-indigo-300 dark:hover:border-indigo-700">
+      <div class="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto mb-2 text-xs">
+        <i class="fa-solid fa-users"></i>
+      </div>
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Divisions</div>
+      <div class="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{{ total_divisions }}</div>
+      <div class="mt-1 text-[11px] text-slate-400">Years 1–4</div>
     </div>
 
-    <div class="card p-4 text-center">
-      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Rooms</div>
-      <div class="mt-2 text-2xl font-bold text-slate-800">{{ total_rooms }}</div>
-      <div class="mt-1 text-xs text-slate-400">Classrooms & Labs</div>
+    <div class="card p-4 text-center group hover:border-indigo-300 dark:hover:border-indigo-700">
+      <div class="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-2 text-xs">
+        <i class="fa-solid fa-door-open"></i>
+      </div>
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Rooms</div>
+      <div class="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{{ total_rooms }}</div>
+      <div class="mt-1 text-[11px] text-slate-400">Class &amp; Labs</div>
     </div>
 
-    <div class="card p-4 text-center">
-      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Teachers</div>
-      <div class="mt-2 text-2xl font-bold text-slate-800">{{ total_teachers }}</div>
-      <div class="mt-1 text-xs text-slate-400">Faculty Members</div>
+    <div class="card p-4 text-center group hover:border-indigo-300 dark:hover:border-indigo-700">
+      <div class="w-8 h-8 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto mb-2 text-xs">
+        <i class="fa-solid fa-chalkboard-user"></i>
+      </div>
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Faculty</div>
+      <div class="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{{ total_teachers }}</div>
+      <div class="mt-1 text-[11px] text-slate-400">Professors</div>
     </div>
 
-    <div class="card p-4 text-center">
-      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Subjects</div>
-      <div class="mt-2 text-2xl font-bold text-slate-800">{{ total_subjects }}</div>
-      <div class="mt-1 text-xs text-slate-400">Theory & Practical</div>
+    <div class="card p-4 text-center group hover:border-indigo-300 dark:hover:border-indigo-700">
+      <div class="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto mb-2 text-xs">
+        <i class="fa-solid fa-book-open"></i>
+      </div>
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Subjects</div>
+      <div class="mt-1 text-2xl font-extrabold text-slate-900 dark:text-white">{{ total_subjects }}</div>
+      <div class="mt-1 text-[11px] text-slate-400">Theory + Practical</div>
     </div>
 
-    <div class="card p-4 text-center">
-      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Scheduled Slots</div>
-      <div class="mt-2 text-2xl font-bold text-indigo-600">{{ total_entries }}</div>
-      <div class="mt-1 text-xs text-slate-400">{{ coverage_percent }}% of {{ hours_requested }}</div>
+    <div class="card p-4 text-center group hover:border-indigo-300 dark:hover:border-indigo-700">
+      <div class="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-2 text-xs">
+        <i class="fa-solid fa-calendar-check"></i>
+      </div>
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Placed Slots</div>
+      <div class="mt-1 text-2xl font-extrabold text-indigo-600 dark:text-indigo-400">{{ total_entries }}</div>
+      <div class="mt-1 text-[11px] text-slate-400 font-medium">{{ coverage_percent }}% of {{ hours_requested }}h</div>
     </div>
 
-    <div class="card p-4 text-center">
-      <div class="text-xs font-medium text-slate-500 uppercase tracking-wider">Issues Reported</div>
-      <div class="mt-2 text-2xl font-bold {% if total_issues > 0 %}text-amber-600{% else %}text-emerald-600{% endif %}">
+    <div class="card p-4 text-center group hover:border-indigo-300 dark:hover:border-indigo-700">
+      <div class="w-8 h-8 rounded-xl {% if total_issues > 0 %}bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400{% else %}bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400{% endif %} flex items-center justify-center mx-auto mb-2 text-xs">
+        <i class="fa-solid {% if total_issues > 0 %}fa-triangle-exclamation{% else %}fa-circle-check{% endif %}"></i>
+      </div>
+      <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Issues</div>
+      <div class="mt-1 text-2xl font-extrabold {% if total_issues > 0 %}text-amber-600 dark:text-amber-400{% else %}text-emerald-600 dark:text-emerald-400{% endif %}">
         {{ total_issues }}
       </div>
-      <div class="mt-1 text-xs text-slate-400">
-        {% if total_issues %}<a href="{% url 'scheduler:issue_centre' %}" class="text-amber-600 hover:underline font-semibold">Review &amp; fix</a>
-        {% else %}Nothing unresolved{% endif %}
+      <div class="mt-1 text-[11px]">
+        {% if total_issues %}<a href="{% url 'scheduler:issue_centre' %}" class="text-amber-600 dark:text-amber-400 hover:underline font-semibold">Review &rarr;</a>
+        {% else %}<span class="text-slate-400">Clean</span>{% endif %}
       </div>
     </div>
   </div>
 
-  <!-- Semester Info & Quick Actions -->
+  <!-- Semester Info & Constraints Matrix -->
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
     <!-- Active Semester Card -->
-    <div class="card p-6 lg:col-span-2">
-      <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
-        <i class="fa-solid fa-graduation-cap text-indigo-600"></i> Semester Overview
+    <div class="card p-6 sm:p-7 lg:col-span-2">
+      <h2 class="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+        <i class="fa-solid fa-graduation-cap text-indigo-600 dark:text-indigo-400"></i> Semester Overview &amp; Control
       </h2>
       {% if active_semester %}
-      <div class="mt-4 border rounded-xl p-4 bg-slate-50 border-slate-200">
-        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div class="mt-4 border rounded-2xl p-5 bg-slate-50/70 dark:bg-slate-800/40 border-slate-200/80 dark:border-slate-800">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 class="text-base font-bold text-slate-900">{{ active_semester.name }}</h3>
-            <p class="text-xs text-slate-500 mt-1">
-              Dates: <span class="font-medium text-slate-700">{{ active_semester.start_date }}</span> to
-              <span class="font-medium text-slate-700">{{ active_semester.end_date }}</span>
-              ({{ active_semester.number_of_weeks }} weeks)
+            <h3 class="text-base font-extrabold text-slate-900 dark:text-white">{{ active_semester.name }}</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Academic Term: <span class="font-semibold text-slate-700 dark:text-slate-300">{{ active_semester.start_date }}</span> to
+              <span class="font-semibold text-slate-700 dark:text-slate-300">{{ active_semester.end_date }}</span>
+              ({{ active_semester.number_of_weeks }} instructional weeks)
             </p>
           </div>
-          <div class="flex gap-2">
-            <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ active_semester.id }}" class="btn-primary !text-xs !py-1.5">
+          <div class="flex flex-wrap gap-2">
+            <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ active_semester.id }}" class="btn-primary !text-xs !py-2">
               <i class="fa-solid fa-rotate"></i> Solver
             </a>
-            <a href="{% url 'scheduler:preferences' %}?semester_id={{ active_semester.id }}" class="btn-ghost !text-xs !py-1.5">
+            <a href="{% url 'scheduler:preferences' %}?semester_id={{ active_semester.id }}" class="btn-ghost !text-xs !py-2">
               <i class="fa-solid fa-sliders"></i> Preferences
             </a>
-            <a href="{% url 'scheduler:timetable_view' %}?semester_id={{ active_semester.id }}" class="btn-ghost !text-xs !py-1.5">
-              <i class="fa-solid fa-eye"></i> View
+            <a href="{% url 'scheduler:timetable_view' %}?semester_id={{ active_semester.id }}" class="btn-ghost !text-xs !py-2">
+              <i class="fa-solid fa-table-cells"></i> View Grid
             </a>
           </div>
         </div>
       </div>
       {% else %}
-      <div class="mt-4 text-center py-8 border border-dashed rounded-xl border-slate-300">
-        <i class="fa-solid fa-folder-open text-slate-400 text-3xl mb-2"></i>
-        <p class="text-sm text-slate-500">No semester data found.</p>
-        <div class="flex flex-wrap justify-center gap-2 mt-3">
+      <div class="mt-4 text-center py-10 border border-dashed rounded-2xl border-slate-300 dark:border-slate-700">
+        <i class="fa-solid fa-folder-open text-slate-400 text-3xl mb-3"></i>
+        <p class="text-sm text-slate-500 dark:text-slate-400 font-medium">No semester data found.</p>
+        <div class="flex flex-wrap justify-center gap-2.5 mt-4">
           <a href="{% url 'scheduler:upload_pdf' %}" class="btn-primary">
-            <i class="fa-solid fa-file-pdf"></i> Import from PDF
+            <i class="fa-solid fa-file-pdf"></i> Import College PDF
           </a>
           <a href="{% url 'scheduler:upload_json' %}" class="btn-ghost">
             <i class="fa-solid fa-file-code"></i> Upload JSON
@@ -176,15 +207,15 @@
 
       <!-- Available Semesters List -->
       {% if semesters|length > 1 %}
-      <h3 class="text-sm font-semibold text-slate-700 mt-6 mb-3">All Semesters in Database</h3>
-      <div class="divide-y divide-slate-100 border rounded-xl overflow-hidden">
+      <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mt-6 mb-3">Other Semesters</h3>
+      <div class="divide-y divide-slate-100 dark:divide-slate-800 border rounded-2xl overflow-hidden border-slate-200 dark:border-slate-800">
         {% for sem in semesters %}
-        <div class="p-3 flex items-center justify-between hover:bg-slate-50 text-sm">
+        <div class="p-3.5 flex items-center justify-between hover:bg-slate-50/70 dark:hover:bg-slate-800/40 text-xs">
           <div>
-            <span class="font-medium text-slate-800">{{ sem.name }}</span>
-            <span class="text-xs text-slate-400 ml-2">({{ sem.start_date }} – {{ sem.end_date }})</span>
+            <span class="font-bold text-slate-800 dark:text-slate-200">{{ sem.name }}</span>
+            <span class="text-slate-400 ml-2">({{ sem.start_date }} &ndash; {{ sem.end_date }})</span>
           </div>
-          <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ sem.id }}" class="text-xs font-semibold text-indigo-600 hover:underline">
+          <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ sem.id }}" class="font-bold text-indigo-600 dark:text-indigo-400 hover:underline">
             Manage &rarr;
           </a>
         </div>
@@ -193,35 +224,29 @@
       {% endif %}
     </div>
 
-    <!-- Constraints & Solver Guarantees -->
-    <div class="card p-6">
-      <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
-        <i class="fa-solid fa-shield-halved text-emerald-600"></i> Solver Constraints
+    <!-- Solver Guarantees Matrix -->
+    <div class="card p-6 sm:p-7">
+      <h2 class="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2.5">
+        <i class="fa-solid fa-shield-halved text-emerald-600 dark:text-emerald-400"></i> Hard Solver Guarantees
       </h2>
-      <ul class="mt-4 space-y-2.5 text-xs text-slate-600">
-        <li class="flex items-start gap-2">
+      <p class="text-[11px] text-slate-400 mt-1">Mathematically enforced constraints guaranteed conflict-free</p>
+      
+      <ul class="mt-4 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+        <li class="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50/60 dark:bg-slate-800/30">
           <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
-          <span><strong>No Teacher Overlap:</strong> A faculty member is never booked twice in one slot.</span>
+          <span><strong class="text-slate-900 dark:text-slate-100">No Faculty Clashes:</strong> Teachers are never assigned to multiple places simultaneously.</span>
         </li>
-        <li class="flex items-start gap-2">
+        <li class="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50/60 dark:bg-slate-800/30">
           <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
-          <span><strong>No Division Overlap:</strong> A division attends at most one lecture/lab per period.</span>
+          <span><strong class="text-slate-900 dark:text-slate-100">Division Exclusivity:</strong> Divisions attend only 1 class/lab per time slot.</span>
         </li>
-        <li class="flex items-start gap-2">
+        <li class="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50/60 dark:bg-slate-800/30">
           <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
-          <span><strong>No Room Clashes:</strong> Each classroom or lab hosts only one division at a time.</span>
+          <span><strong class="text-slate-900 dark:text-slate-100">Room Strictness:</strong> Classroom &amp; lab capacities and specialized room types strictly observed.</span>
         </li>
-        <li class="flex items-start gap-2">
+        <li class="flex items-start gap-2.5 p-2 rounded-xl bg-slate-50/60 dark:bg-slate-800/30">
           <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
-          <span><strong>Lab Room Strictness:</strong> Labs only in lab rooms; lectures only in classrooms.</span>
-        </li>
-        <li class="flex items-start gap-2">
-          <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
-          <span><strong>Teacher Unavailability:</strong> Respects custom leave / part-time constraints.</span>
-        </li>
-        <li class="flex items-start gap-2">
-          <i class="fa-solid fa-check text-emerald-500 mt-0.5"></i>
-          <span><strong>Lunch Break Exclusion:</strong> Fully excluded from scheduling windows.</span>
+          <span><strong class="text-slate-900 dark:text-slate-100">Lunch Break Reservation:</strong> Institutional lunch break slots protected.</span>
         </li>
       </ul>
     </div>

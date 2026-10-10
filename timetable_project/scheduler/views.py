@@ -1399,3 +1399,164 @@ def division_preference_view(request, division_id):
             "allowed_count": len(preference.allowed_slots(slots)),
         },
     )
+
+
+# ===========================================================================
+# Advanced Features: iCalendar (.ics) Export, Analytics API & Omni Search
+# ===========================================================================
+@login_required
+def export_ical_view(request):
+    """
+    Generate an iCalendar (.ics) file compatible with Google Calendar,
+    Apple Calendar, and Microsoft Outlook.
+    Supports either division or personal timetable export.
+    """
+    from datetime import datetime, date, timedelta
+
+    division_id = request.GET.get("division_id")
+    semester_id = request.GET.get("semester_id")
+
+    teacher = teacher_profile(request.user)
+    student = student_profile(request.user)
+
+    selected_semester = None
+    if semester_id:
+        selected_semester = Semester.objects.filter(pk=semester_id).first()
+    if not selected_semester:
+        selected_semester = Semester.objects.order_by("-start_date").first()
+
+    entries_qs = TimetableEntry.objects.select_related(
+        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+    )
+    if selected_semester:
+        entries_qs = entries_qs.filter(semester=selected_semester)
+
+    cal_name = "College Timetable"
+    if division_id and is_admin(request.user):
+        division = YearDivision.objects.filter(pk=division_id).first()
+        if division:
+            entries_qs = entries_qs.filter(assignment__division=division)
+            cal_name = f"Timetable - {division.name}"
+    elif teacher:
+        entries_qs = entries_qs.filter(assignment__teacher=teacher)
+        cal_name = f"Teaching Schedule - {teacher.name}"
+    elif student and student.division:
+        entries_qs = entries_qs.filter(assignment__division=student.division)
+        cal_name = f"Timetable - {student.division.name}"
+
+    entries = list(entries_qs)
+
+    day_map = {
+        "MON": 0, "TUE": 1, "WED": 2, "THU": 3, "FRI": 4, "SAT": 5, "SUN": 6
+    }
+
+    base_date = selected_semester.start_date if selected_semester else date.today()
+    monday_anchor = base_date - timedelta(days=base_date.weekday())
+    end_date = selected_semester.end_date if selected_semester else (base_date + timedelta(weeks=16))
+
+    ics_lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Automatic Timetable Generator//EN",
+        "CALSCALE:GREGORIAN",
+        f"X-WR-CALNAME:{cal_name}",
+        "METHOD:PUBLISH",
+    ]
+
+    for entry in entries:
+        day_code = entry.time_slot.day
+        day_offset = day_map.get(day_code, 0)
+        class_date = monday_anchor + timedelta(days=day_offset)
+
+        start_dt = datetime.combine(class_date, entry.time_slot.start_time)
+        end_dt = datetime.combine(class_date, entry.time_slot.end_time)
+
+        dtstamp = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+        dtstart = start_dt.strftime("%Y%m%dT%H%M%S")
+        dtend = end_dt.strftime("%Y%m%dT%H%M%S")
+        until = end_date.strftime("%Y%m%dT235959Z")
+
+        summary = f"{entry.assignment.subject.name} ({entry.assignment.division.name})"
+        location = f"{entry.room.name} ({'Lab' if entry.room.is_lab else 'Classroom'})"
+        desc = (
+            f"Subject: {entry.assignment.subject.name}\\n"
+            f"Teacher: {entry.assignment.teacher.name}\\n"
+            f"Division: {entry.assignment.division.name}\\n"
+            f"Room: {entry.room.name}"
+        )
+
+        ics_lines.extend([
+            "BEGIN:VEVENT",
+            f"UID:tt-entry-{entry.id}-{entry.time_slot.slot_code}@timetable-generator",
+            f"DTSTAMP:{dtstamp}",
+            f"DTSTART:{dtstart}",
+            f"DTEND:{dtend}",
+            f"RRULE:FREQ=WEEKLY;UNTIL={until}",
+            f"SUMMARY:{summary}",
+            f"LOCATION:{location}",
+            f"DESCRIPTION:{desc}",
+            "STATUS:CONFIRMED",
+            "END:VEVENT",
+        ])
+
+    ics_lines.append("END:VCALENDAR")
+    response = HttpResponse("\r\n".join(ics_lines), content_type="text/calendar; charset=utf-8")
+    safe_name = cal_name.replace(" ", "_").replace("-", "_")
+    response["Content-Disposition"] = f'attachment; filename="{safe_name}.ics"'
+    return response
+
+
+@login_required
+def omni_search_api(request):
+    """
+    Instant JSON omni-search for keyboard shortcut (Ctrl+K).
+    Returns matched divisions, subjects, teachers, and rooms with direct URLs.
+    """
+    from django.http import JsonResponse
+
+    q = (request.GET.get("q") or "").strip().lower()
+    if not q or len(q) < 2:
+        return JsonResponse({"results": []})
+
+    results = []
+    is_adm = is_admin(request.user)
+
+    for div in YearDivision.objects.filter(name__icontains=q)[:5]:
+        url = reverse("scheduler:timetable_view") + f"?division_id={div.id}" if is_adm else reverse("scheduler:my_timetable")
+        results.append({
+            "category": "Division",
+            "icon": "fa-users",
+            "title": f"Division {div.name}",
+            "subtitle": f"Year {div.year} • Strength: {div.strength}",
+            "url": url,
+        })
+
+    for tch in Teacher.objects.filter(Q(name__icontains=q) | Q(user__username__icontains=q))[:5]:
+        results.append({
+            "category": "Faculty",
+            "icon": "fa-user-tie",
+            "title": tch.name,
+            "subtitle": f"Max {tch.max_hours_per_week}h/week",
+            "url": reverse("scheduler:manage_entries") + f"?teacher_id={tch.id}" if is_adm else reverse("scheduler:my_timetable"),
+        })
+
+    for sub in Subject.objects.filter(Q(name__icontains=q) | Q(code__icontains=q))[:5]:
+        results.append({
+            "category": "Subject",
+            "icon": "fa-book-open",
+            "title": f"{sub.name} ({sub.code or 'N/A'})",
+            "subtitle": f"{'Laboratory' if sub.is_lab else 'Theory Lecture'}",
+            "url": reverse("scheduler:manage_entries") + f"?q={sub.code or sub.name}" if is_adm else reverse("scheduler:my_timetable"),
+        })
+
+    for rm in Room.objects.filter(name__icontains=q)[:5]:
+        results.append({
+            "category": "Room",
+            "icon": "fa-door-open",
+            "title": rm.name,
+            "subtitle": f"Capacity: {rm.capacity} • {'Lab' if rm.is_lab else 'Classroom'}",
+            "url": reverse("scheduler:manage_entries") + f"?room_id={rm.id}" if is_adm else reverse("scheduler:my_timetable"),
+        })
+
+    return JsonResponse({"results": results})
+

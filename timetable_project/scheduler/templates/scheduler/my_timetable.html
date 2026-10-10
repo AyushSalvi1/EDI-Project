@@ -6,27 +6,34 @@
 <div class="space-y-6">
 
   <!-- Header & Semester Selector -->
-  <div class="card p-4 sm:p-6 no-print">
-    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+  <div class="card p-5 sm:p-7 no-print bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+    <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
       <div>
-        <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider
+            {% if scope == 'teacher' %}bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800
+            {% else %}bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800{% endif %}">
+            {% if scope == 'teacher' %}Faculty Schedule Portal{% else %}Student Academic Timetable{% endif %}
+          </span>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
           {% if scope == 'teacher' %}
-            <i class="fa-solid fa-user-tie text-indigo-600"></i> My Teaching Timetable
+            <i class="fa-solid fa-chalkboard-user text-indigo-600 dark:text-indigo-400"></i> My Teaching Timetable
           {% else %}
-            <i class="fa-solid fa-graduation-cap text-emerald-600"></i> My Timetable
+            <i class="fa-solid fa-graduation-cap text-emerald-600 dark:text-emerald-400"></i> My Academic Timetable
           {% endif %}
         </h1>
-        <p class="text-xs sm:text-sm text-slate-500 mt-1">
-          Read-only view &mdash; only the periods allocated to you are shown.
+        <p class="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          Live personalized view &mdash; only your registered classes, lab sessions, and lecture venues are displayed.
         </p>
       </div>
 
       <div class="flex flex-wrap items-end gap-3">
         <form method="GET" class="flex items-end gap-3">
           <div>
-            <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1">Semester</label>
+            <label class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1">Semester</label>
             <select name="semester_id" onchange="this.form.submit()"
-                    class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                    class="rounded-xl border border-slate-300 dark:border-slate-700 px-3.5 py-2 text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 font-medium focus:ring-2 focus:ring-indigo-500 outline-none shadow-xs">
               {% for s in semesters %}
               <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>
                 {{ s.name }}
@@ -37,60 +44,84 @@
             </select>
           </div>
         </form>
-        <button type="button" onclick="window.print()" class="btn-ghost !text-xs !py-1.5">
-          <i class="fa-solid fa-print"></i> Print / PDF
+
+        {% if selected_semester and entries %}
+        <!-- iCal Export -->
+        <a href="{% url 'scheduler:export_ical' %}?semester_id={{ selected_semester.id }}"
+           class="btn-ghost !text-xs !py-2 text-indigo-600 dark:text-indigo-400 hover:border-indigo-300"
+           title="Sync to Google Calendar / Apple Calendar">
+          <i class="fa-solid fa-calendar-plus text-indigo-500"></i> Sync to Calendar (.ics)
+        </a>
+        {% endif %}
+
+        <button type="button" onclick="window.print()" class="btn-ghost !text-xs !py-2">
+          <i class="fa-solid fa-print"></i> Print
         </button>
       </div>
     </div>
   </div>
 
-  <!-- Identity / summary banner -->
-  <div class="flex flex-wrap items-center justify-between gap-4 bg-slate-900 text-white p-4 rounded-xl shadow-sm">
-    <div class="flex items-center gap-3">
-      <div class="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center font-bold text-lg shrink-0">
-        {% if scope == 'teacher' %}<i class="fa-solid fa-chalkboard-user text-sm"></i>{% else %}<i class="fa-solid fa-user-graduate text-sm"></i>{% endif %}
+  <!-- Identity / Summary Banner -->
+  <div class="flex flex-wrap items-center justify-between gap-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 rounded-2xl shadow-lg border border-indigo-900/40">
+    <div class="flex items-center gap-4">
+      <div class="w-12 h-12 rounded-2xl bg-indigo-600/40 border border-indigo-400/30 flex items-center justify-center font-extrabold text-xl shadow-inner text-indigo-200">
+        {% if scope == 'teacher' %}<i class="fa-solid fa-chalkboard-user"></i>{% else %}<i class="fa-solid fa-user-graduate"></i>{% endif %}
       </div>
       <div>
-        <h2 class="text-lg font-bold">
-          {% if scope == 'teacher' %}{{ teacher.name }}{% else %}{{ student.full_name }}{% endif %}
-        </h2>
-        <p class="text-xs text-slate-300">
+        <div class="flex items-center gap-2">
+          <h2 class="text-xl font-bold tracking-tight">
+            {% if scope == 'teacher' %}{{ teacher.name }}{% else %}{{ student.full_name }}{% endif %}
+          </h2>
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/30 text-indigo-200 border border-indigo-400/20">
+            {% if scope == 'teacher' %}Faculty{% else %}Roll: {{ student.roll_number }}{% endif %}
+          </span>
+        </div>
+        <p class="text-xs text-indigo-300/80 mt-0.5 font-medium">
           {% if scope == 'teacher' %}
-            {% if selected_semester %}{{ selected_semester.name }}{% endif %}
+            Department: {{ teacher.department|default:"Academics" }} &bull; Semester: {{ selected_semester.name }}
           {% else %}
-            {{ student.roll_number }} &bull; {{ student.division.name }}{% if selected_semester %} &bull; {{ selected_semester.name }}{% endif %}
+            Division: {{ student.division.name }} &bull; Semester: {{ selected_semester.name }}
           {% endif %}
         </p>
       </div>
     </div>
 
-    <div class="flex flex-wrap items-center gap-4 text-center">
-      <div class="px-3 py-1.5 rounded-lg bg-slate-800/70">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Periods / Week</p>
-        <p class="text-sm font-bold">{{ entries|length }}</p>
+    <!-- Quick Stats Metric Pills -->
+    <div class="flex flex-wrap items-center gap-3 text-center">
+      <div class="px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 shadow-sm">
+        <p class="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold">Weekly Sessions</p>
+        <p class="text-base font-extrabold text-indigo-300">{{ entries|length }}</p>
       </div>
       {% if scope == 'teacher' %}
-      <div class="px-3 py-1.5 rounded-lg bg-slate-800/70">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Assigned Load</p>
-        <p class="text-sm font-bold">{{ weekly_load }} / {{ max_hours }} h</p>
+      <div class="px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 shadow-sm">
+        <p class="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold">Faculty Load</p>
+        <p class="text-base font-extrabold text-indigo-300">{{ weekly_load }} / {{ max_hours }} h</p>
       </div>
       {% else %}
-      <div class="px-3 py-1.5 rounded-lg bg-slate-800/70">
-        <p class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Subjects</p>
-        <p class="text-sm font-bold">{{ hours_by_subject|length }}</p>
+      <div class="px-4 py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 shadow-sm">
+        <p class="text-[9px] uppercase tracking-wider text-slate-400 font-extrabold">Active Courses</p>
+        <p class="text-base font-extrabold text-indigo-300">{{ hours_by_subject|length }}</p>
       </div>
       {% endif %}
     </div>
   </div>
 
+  <!-- Weekly Subject Breakdown Chips -->
   {% if hours_by_subject %}
-  <div class="card p-4 sm:p-5 no-print">
-    <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">My Weekly Subject Breakdown</h3>
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+  <div class="card p-5 no-print bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
+    <div class="flex items-center justify-between mb-3">
+      <h3 class="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-2">
+        <i class="fa-solid fa-chart-pie text-indigo-500"></i> Course Distribution
+      </h3>
+      <span class="text-[11px] text-slate-400 font-medium">Hours allocated per week</span>
+    </div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
       {% for name, count in hours_by_subject.items %}
-      <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
-        <span class="text-xs font-semibold text-slate-700 truncate">{{ name }}</span>
-        <span class="shrink-0 px-2 py-0.5 rounded-lg bg-indigo-100 text-indigo-700 text-[11px] font-bold">{{ count }}h</span>
+      <div class="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50/80 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700 transition">
+        <span class="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">{{ name }}</span>
+        <span class="shrink-0 px-2.5 py-0.5 rounded-lg bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 text-[11px] font-extrabold border border-indigo-200/60 dark:border-indigo-800/60">
+          {{ count }}h
+        </span>
       </div>
       {% endfor %}
     </div>
@@ -98,25 +129,32 @@
   {% endif %}
 
   {% if not selected_semester %}
-  <div class="card p-12 text-center">
-    <i class="fa-solid fa-calendar-xmark text-slate-300 text-4xl mb-3"></i>
-    <p class="text-sm font-semibold text-slate-700">No Semester Published Yet</p>
-    <p class="text-xs text-slate-400 mt-1">Your timetable will appear once an administrator publishes a semester.</p>
+  <div class="card p-16 text-center">
+    <div class="w-16 h-16 rounded-3xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-4">
+      <i class="fa-solid fa-calendar-xmark"></i>
+    </div>
+    <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">No Semester Published Yet</h3>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+      Your personalized timetable will appear once an administrator completes and publishes the academic schedule.
+    </p>
   </div>
   {% elif not entries %}
-  <div class="card p-12 text-center">
-    <i class="fa-solid fa-calendar-xmark text-slate-300 text-4xl mb-3"></i>
-    <p class="text-sm font-semibold text-slate-700">No Classes Scheduled</p>
-    <p class="text-xs text-slate-400 mt-1">
+  <div class="card p-16 text-center">
+    <div class="w-16 h-16 rounded-3xl bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto text-2xl mb-4">
+      <i class="fa-solid fa-calendar-xmark"></i>
+    </div>
+    <h3 class="text-base font-bold text-slate-800 dark:text-slate-200">No Classes Scheduled</h3>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
       {% if scope == 'teacher' %}
-        You have no allocated periods in this semester.
+        You currently have no allocated class periods for this semester.
       {% else %}
-        Your division has no scheduled periods yet.
+        Your division currently has no scheduled periods for this semester.
       {% endif %}
     </p>
   </div>
   {% else %}
 
+  <!-- Timetable Grid Component -->
   {% include "scheduler/_timetable_grid.html" %}
 
   {% endif %}

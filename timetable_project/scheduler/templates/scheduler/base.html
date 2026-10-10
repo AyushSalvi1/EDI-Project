@@ -1,138 +1,249 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="scroll-smooth">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>{% block title %}Automatic Timetable Generator{% endblock %}</title>
+  
+  <!-- Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS & Lucide/FontAwesome Icons -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
-      theme: { extend: { colors: {
-        brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca', 900:'#312e81' }
-      }}}
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            display: ['Outfit', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#eef2ff',
+              100: '#e0e7ff',
+              200: '#c7d2fe',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+              800: '#3730a3',
+              900: '#312e81',
+              950: '#1e1b4b',
+            },
+            dark: {
+              card: '#1e293b',
+              surface: '#0f172a',
+              border: '#334155',
+            }
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            'slide-up': 'slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+            'pulse-subtle': 'pulseSubtle 2.5s infinite ease-in-out',
+            'float': 'float 3s ease-in-out infinite',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'scale(0.98)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            },
+            slideUp: {
+              '0%': { opacity: '0', transform: 'translateY(12px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
+            },
+            pulseSubtle: {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0.75' },
+            },
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-4px)' },
+            }
+          }
+        }
+      }
     }
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous">
+
   <style>
-    @media print { .no-print{display:none!important} body{background:white!important} }
-    .card { @apply bg-white rounded-2xl shadow-sm border border-slate-200/80; }
-    .btn-primary { @apply px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm shadow transition duration-150 inline-flex items-center gap-2; }
-    .btn-secondary { @apply px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm shadow transition duration-150 inline-flex items-center gap-2; }
-    .btn-ghost   { @apply px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm transition inline-flex items-center gap-2; }
+    @media print { .no-print{display:none!important} body{background:white!important; color:black!important;} }
 
-    /* Keep the interface feeling instant: never let a tap register as a miss. */
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    .dark ::-webkit-scrollbar-thumb { background: #334155; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .dark ::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    /* UI Cards with Glassmorphism & Soft Transitions */
+    .card {
+      @apply bg-white dark:bg-slate-900/90 rounded-2xl shadow-sm hover:shadow-md border border-slate-200/90 dark:border-slate-800 backdrop-blur-md transition-all duration-200;
+    }
+    .card-glass {
+      @apply bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border border-white/20 dark:border-slate-800/80 shadow-lg rounded-2xl;
+    }
+    
+    /* Interactive Buttons */
+    .btn-primary {
+      @apply px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-semibold text-sm shadow-md shadow-indigo-500/20 hover:shadow-indigo-500/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150 inline-flex items-center gap-2;
+    }
+    .btn-secondary {
+      @apply px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold text-sm shadow-md shadow-emerald-500/20 hover:shadow-emerald-500/35 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-150 inline-flex items-center gap-2;
+    }
+    .btn-ghost {
+      @apply px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold text-sm transition-all duration-150 hover:-translate-y-0.5 active:translate-y-0 inline-flex items-center gap-2;
+    }
+
     a, button, input, select, label { -webkit-tap-highlight-color: transparent; }
-    button:disabled { @apply opacity-60 cursor-not-allowed; }
+    button:disabled { @apply opacity-50 cursor-not-allowed hover:translate-y-0 shadow-none; }
 
-    /* Respect the OS setting so the interface does not flash for motion-sensitive users. */
     @media (prefers-reduced-motion: reduce) {
       * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
     }
 
-    /* Visible keyboard focus, which the CDN reset removes by default. */
-    :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: 6px; }
+    :focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; border-radius: 8px; }
 
-    /* Native confirmation, matched to the design, so nothing needs a dialog library. */
     dialog.js-confirm-dialog {
-      @apply rounded-2xl border-0 p-0 shadow-2xl max-w-md w-[calc(100%-2rem)];
+      @apply rounded-2xl border-0 p-0 shadow-2xl max-w-md w-[calc(100%-2rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-white;
       font-family: inherit;
     }
-    dialog.js-confirm-dialog::backdrop { background: rgba(15, 23, 42, 0.55); }
-  </style>
-</head>
-<body class="bg-slate-50 min-h-screen flex flex-col text-slate-900 antialiased">
+    dialog.js-confirm-dialog::backdrop { background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); }
 
-<!-- ── NAV ──────────────────────────────────────────────────────────── -->
-<nav class="bg-slate-900 text-white shadow-lg sticky top-0 z-50 no-print">
+    /* Omni Search Dialog */
+    #omni-search-modal::backdrop { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(6px); }
+
+    /* Timetable Grid Cell Badges */
+    .slot-card {
+      @apply transition-all duration-200 hover:scale-[1.02] hover:shadow-md cursor-pointer;
+    }
+  </style>
+
+  <script>
+    // Theme sync logic
+    if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    function toggleDarkMode() {
+      if (document.documentElement.classList.contains('dark')) {
+        document.documentElement.classList.remove('dark');
+        localStorage.theme = 'light';
+      } else {
+        document.documentElement.classList.add('dark');
+        localStorage.theme = 'dark';
+      }
+    }
+  </script>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 min-h-screen flex flex-col text-slate-900 dark:text-slate-100 antialiased font-sans selection:bg-indigo-500 selection:text-white transition-colors duration-200">
+
+<!-- ── TOP STATUS / OMNI-SEARCH ACCELERATOR ─────────────────────── -->
+<nav class="bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md text-white border-b border-slate-800/80 sticky top-0 z-50 no-print shadow-lg">
   <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-4">
 
     <!-- Brand -->
-    <a href="{% url 'scheduler:home' %}" class="flex items-center gap-2.5 group shrink-0">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow">
-        <i class="fa-solid fa-calendar-days text-white"></i>
+    <a href="{% url 'scheduler:home' %}" class="flex items-center gap-3 group shrink-0">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/25 group-hover:scale-105 group-hover:shadow-indigo-500/40 transition-all duration-200">
+        <i class="fa-solid fa-calendar-days text-white text-base"></i>
       </div>
       <div class="leading-tight">
-        <span class="font-bold text-base group-hover:text-indigo-300 transition">Timetable Generator</span>
-        <span class="block text-[10px] text-indigo-400 font-mono">Google OR-Tools CP-SAT</span>
+        <span class="font-extrabold text-base tracking-tight font-display group-hover:text-indigo-300 transition-colors">Timetable OS</span>
+        <span class="flex items-center gap-1.5 text-[10px] text-indigo-400 font-mono">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> CP-SAT Solver v2.0
+        </span>
       </div>
     </a>
 
-    <!-- Nav links -->
+    <!-- Universal Search Trigger Bar (Ctrl + K) -->
+    <button type="button" onclick="openOmniSearch()" 
+            class="hidden md:flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-slate-800/90 hover:bg-slate-800 border border-slate-700/80 text-slate-400 hover:text-slate-200 text-xs transition duration-150 w-64 lg:w-80 group shadow-inner">
+      <i class="fa-solid fa-magnifying-glass text-slate-500 group-hover:text-indigo-400 transition-colors"></i>
+      <span class="flex-1 text-left truncate">Search division, faculty, room...</span>
+      <kbd class="px-1.5 py-0.5 rounded bg-slate-700 text-[10px] font-mono text-slate-300 border border-slate-600">Ctrl K</kbd>
+    </button>
+
+    <!-- Navigation Links -->
     <div class="flex items-center gap-1.5 text-xs font-semibold">
       {% with url_name=request.resolver_match.url_name %}
         {% if user.is_superuser or user.is_staff %}
-          <a href="{% url 'scheduler:home' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'home' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+          <a href="{% url 'scheduler:home' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'home' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}">
             <i class="fa-solid fa-gauge-high"></i><span class="hidden sm:inline">Dashboard</span>
           </a>
-          <a href="{% url 'scheduler:issue_centre' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 relative {% if url_name == 'issue_centre' or url_name == 'proposal_list' or url_name == 'find_fixes' or url_name == 'approve_proposal' or url_name == 'reject_proposal' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+          <a href="{% url 'scheduler:issue_centre' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 relative {% if url_name == 'issue_centre' or url_name == 'proposal_list' or url_name == 'find_fixes' or url_name == 'approve_proposal' or url_name == 'reject_proposal' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}"
              title="Scheduling issues and suggested fixes">
             <i class="fa-solid fa-triangle-exclamation"></i><span class="hidden lg:inline">Issues</span>
             {% if unread_count %}
-            <span class="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">{{ unread_count }}</span>
+            <span class="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center shadow-sm animate-pulse">{{ unread_count }}</span>
             {% endif %}
           </a>
-          <a href="{% url 'scheduler:preferences' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'preferences' or url_name == 'division_preference' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}"
+          <a href="{% url 'scheduler:preferences' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'preferences' or url_name == 'division_preference' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}"
              title="Working days, timings and per-division slots">
             <i class="fa-solid fa-sliders"></i><span class="hidden xl:inline">Preferences</span>
           </a>
-          <a href="{% url 'scheduler:upload_pdf' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'upload_pdf' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+          <a href="{% url 'scheduler:upload_pdf' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'upload_pdf' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}">
             <i class="fa-solid fa-file-import"></i><span class="hidden xl:inline">Import</span>
           </a>
-          <a href="{% url 'scheduler:generate_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'generate_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
-            <i class="fa-solid fa-wand-magic-sparkles"></i><span class="hidden sm:inline">Generate</span>
+          <a href="{% url 'scheduler:generate_timetable' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'generate_timetable' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}">
+            <i class="fa-solid fa-wand-magic-sparkles text-amber-300"></i><span class="hidden sm:inline">Generate</span>
           </a>
-          <a href="{% url 'scheduler:timetable_view' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'timetable_view' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+          <a href="{% url 'scheduler:timetable_view' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'timetable_view' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}">
             <i class="fa-solid fa-table-cells"></i><span class="hidden lg:inline">Timetables</span>
           </a>
-          <a href="{% url 'scheduler:manage_entries' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'manage_entries' or url_name == 'move_entry' or url_name == 'delete_entry' or url_name == 'swap_entries' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+          <a href="{% url 'scheduler:manage_entries' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'manage_entries' or url_name == 'move_entry' or url_name == 'delete_entry' or url_name == 'swap_entries' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}">
             <i class="fa-solid fa-screwdriver-wrench"></i><span class="hidden xl:inline">Manage</span>
           </a>
-          <a href="/admin/" class="px-3 py-2 rounded-lg text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 transition flex items-center gap-1.5"
-             title="Django admin">
-            <i class="fa-solid fa-sliders"></i>
-          </a>
         {% else %}
-          <a href="{% url 'scheduler:my_timetable' %}" class="px-3 py-2 rounded-lg transition flex items-center gap-1.5 {% if url_name == 'my_timetable' %}bg-indigo-600 text-white{% else %}text-slate-300 hover:text-white hover:bg-slate-800{% endif %}">
+          <a href="{% url 'scheduler:my_timetable' %}" class="px-3 py-2 rounded-xl transition flex items-center gap-1.5 {% if url_name == 'my_timetable' %}bg-indigo-600 text-white shadow-md shadow-indigo-600/30{% else %}text-slate-300 hover:text-white hover:bg-slate-800/90{% endif %}">
             <i class="fa-solid {% if user.teacher_profile %}fa-chalkboard-user{% else %}fa-graduation-cap{% endif %}"></i><span class="hidden sm:inline">My Timetable</span>
           </a>
         {% endif %}
       {% endwith %}
 
+      <!-- Theme Switcher Button -->
+      <button type="button" onclick="toggleDarkMode()" title="Toggle Dark/Light Mode"
+              class="w-8 h-8 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 dark:text-indigo-300 flex items-center justify-center transition ml-1">
+        <i class="fa-solid fa-sun dark:hidden text-xs"></i>
+        <i class="fa-solid fa-moon hidden dark:inline text-xs"></i>
+      </button>
+
       {% if user.is_authenticated %}
-        <div class="flex items-center gap-2 ml-2 pl-3 border-l border-slate-700">
+        <div class="flex items-center gap-2 ml-1 pl-2.5 border-l border-slate-700">
           <a href="{% url 'scheduler:notifications' %}" title="Notifications"
-             class="relative px-2.5 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center">
-            <i class="fa-solid fa-bell"></i>
+             class="relative w-8 h-8 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800 transition flex items-center justify-center">
+            <i class="fa-solid fa-bell text-xs"></i>
             {% if notifications_unread %}
-            <span class="absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full bg-rose-500 text-white text-[9px] font-bold grid place-items-center">{{ notifications_unread }}</span>
+            <span class="absolute top-1 right-1 min-w-[14px] h-[14px] px-1 rounded-full bg-rose-500 text-white text-[8px] font-bold grid place-items-center animate-pulse">{{ notifications_unread }}</span>
             {% endif %}
           </a>
-          <div class="hidden md:block text-right leading-tight">
-            <span class="block text-[11px] font-bold text-white truncate max-w-[130px]">
+          <div class="hidden md:block text-right leading-tight max-w-[120px]">
+            <span class="block text-[11px] font-bold text-white truncate">
               {% if user.teacher_profile %}{{ user.teacher_profile.name }}
               {% elif user.student_profile %}{{ user.student_profile.full_name }}
               {% else %}{{ user.username }}{% endif %}
             </span>
-            <span class="block text-[9px] uppercase tracking-wider font-bold
+            <span class="block text-[9px] uppercase tracking-wider font-extrabold
               {% if user.is_superuser or user.is_staff %}text-rose-400{% elif user.teacher_profile %}text-indigo-400{% else %}text-emerald-400{% endif %}">
-              {% if user.is_superuser or user.is_staff %}Admin{% elif user.teacher_profile %}Teacher{% else %}Student{% endif %}
+              {% if user.is_superuser or user.is_staff %}Admin{% elif user.teacher_profile %}Faculty{% else %}Student{% endif %}
             </span>
           </div>
           <form method="POST" action="{% url 'scheduler:logout' %}">
             {% csrf_token %}
             <button type="submit" title="Sign out"
-                    class="px-2.5 py-2 rounded-lg text-slate-400 hover:text-rose-300 hover:bg-slate-800 transition flex items-center">
-              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    class="w-8 h-8 rounded-xl text-slate-400 hover:text-rose-300 hover:bg-slate-800 transition flex items-center justify-center">
+              <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
             </button>
           </form>
         </div>
       {% else %}
         <div class="flex items-center gap-1.5 ml-2 pl-3 border-l border-slate-700">
-          <a href="{% url 'scheduler:login' %}" class="px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition flex items-center gap-1.5">
-            <i class="fa-solid fa-right-to-bracket"></i><span class="hidden sm:inline">Sign In</span>
-          </a>
-          <a href="{% url 'scheduler:register' %}" class="px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition hidden sm:inline-flex items-center">
-            Register
+          <a href="{% url 'scheduler:login' %}" class="btn-primary !text-xs !py-1.5">
+            <i class="fa-solid fa-right-to-bracket"></i><span>Sign In</span>
           </a>
         </div>
       {% endif %}
@@ -140,52 +251,140 @@
   </div>
 </nav>
 
-<!-- ── FLASH MESSAGES ──────────────────────────────────────────────── -->
+<!-- ── FLASH NOTIFICATIONS (Toast Style) ────────────────────────── -->
 {% if messages %}
-<div class="max-w-7xl mx-auto px-4 pt-4 space-y-2 no-print">
+<div class="max-w-7xl mx-auto px-4 pt-4 space-y-2.5 no-print animate-slide-up">
   {% for msg in messages %}
-  <div class="p-3.5 rounded-xl text-sm font-medium flex items-start gap-3 border
-    {% if msg.tags == 'success' %}bg-emerald-50 border-emerald-200 text-emerald-900
-    {% elif msg.tags == 'error'   %}bg-rose-50    border-rose-200   text-rose-900
-    {% else                       %}bg-blue-50    border-blue-200   text-blue-900{% endif %}">
+  <div class="p-3.5 rounded-2xl text-sm font-medium flex items-start gap-3 border shadow-sm backdrop-blur-md transition-all
+    {% if msg.tags == 'success' %}bg-emerald-50/90 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200
+    {% elif msg.tags == 'error'   %}bg-rose-50/90 dark:bg-rose-950/40    border-rose-200 dark:border-rose-800   text-rose-900 dark:text-rose-200
+    {% else                       %}bg-blue-50/90 dark:bg-blue-950/40    border-blue-200 dark:border-blue-800   text-blue-900 dark:text-blue-200{% endif %}">
     <i class="fa-solid mt-0.5 {% if msg.tags == 'success' %}fa-circle-check text-emerald-500
                         {% elif msg.tags == 'error' %}fa-circle-exclamation text-rose-500
                         {% else                     %}fa-circle-info text-blue-500{% endif %}"></i>
-    <div class="flex-1 whitespace-pre-line">{{ msg }}</div>
+    <div class="flex-1 whitespace-pre-line leading-relaxed">{{ msg }}</div>
   </div>
   {% endfor %}
 </div>
 {% endif %}
 
-<!-- ── MAIN ─────────────────────────────────────────────────────────── -->
-<main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6">
+<!-- ── MAIN CONTENT CONTAINER ───────────────────────────────────── -->
+<main class="flex-grow max-w-7xl w-full mx-auto px-4 py-6 animate-fade-in">
   {% block content %}{% endblock %}
 </main>
 
-<!-- ── FOOTER ───────────────────────────────────────────────────────── -->
-<footer class="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-400 no-print">
-  Automatic Timetable Generator &bull; Google OR-Tools CP-SAT Solver &bull; Role-Based Portals for Admin, Faculty &amp; Students
+<!-- ── FOOTER ───────────────────────────────────────────────────── -->
+<footer class="border-t border-slate-200 dark:border-slate-800 bg-white/60 dark:bg-slate-900/60 backdrop-blur-md py-6 text-center text-xs text-slate-400 dark:text-slate-500 no-print transition-colors">
+  <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+    <div class="flex items-center gap-2 font-medium">
+      <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+      Timetable Engine &bull; Powered by Google OR-Tools CP-SAT
+    </div>
+    <div class="text-[11px]">
+      Press <kbd class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 font-mono text-slate-600 dark:text-slate-400">Ctrl + K</kbd> to search anytime
+    </div>
+  </div>
 </footer>
+
+<!-- ── UNIVERSAL OMNI SEARCH MODAL (Ctrl + K) ───────────────────── -->
+<dialog id="omni-search-modal" class="rounded-2xl border-0 p-0 shadow-2xl max-w-lg w-[calc(100%-2rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 backdrop-blur-xl">
+  <div class="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center gap-3">
+    <i class="fa-solid fa-magnifying-glass text-indigo-500 text-sm"></i>
+    <input type="text" id="omni-search-input" placeholder="Type division, faculty, or room name..."
+           class="w-full bg-transparent border-0 outline-none text-sm placeholder-slate-400 font-medium">
+    <kbd class="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-slate-500 border border-slate-300 dark:border-slate-700">ESC</kbd>
+  </div>
+  <div id="omni-search-results" class="max-h-80 overflow-y-auto p-2 divide-y divide-slate-100 dark:divide-slate-800">
+    <div class="p-6 text-center text-xs text-slate-400">
+      Type at least 2 characters to search divisions, professors, subjects and classrooms.
+    </div>
+  </div>
+</dialog>
 
 {% block scripts %}{% endblock %}
 
 <script>
-// One confirmation dialog, reused for every destructive action.
+// Universal Omni Search Modal handler
+var omniModal = document.getElementById('omni-search-modal');
+var omniInput = document.getElementById('omni-search-input');
+var omniResults = document.getElementById('omni-search-results');
+var omniTimer = null;
+
+function openOmniSearch() {
+  if (!omniModal) return;
+  omniModal.showModal();
+  omniInput.focus();
+  omniInput.select();
+}
+
+window.addEventListener('keydown', function (e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    openOmniSearch();
+  }
+});
+
+omniModal.addEventListener('click', function (e) {
+  var rect = omniModal.getBoundingClientRect();
+  var isInModal = (rect.top <= e.clientY && e.clientY <= rect.top + rect.height &&
+                   rect.left <= e.clientX && e.clientX <= rect.left + rect.width);
+  if (!isInModal) {
+    omniModal.close();
+  }
+});
+
+omniInput.addEventListener('input', function () {
+  clearTimeout(omniTimer);
+  var q = omniInput.value.trim();
+  if (q.length < 2) {
+    omniResults.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">Type at least 2 characters to search.</div>';
+    return;
+  }
+  omniTimer = setTimeout(function () {
+    fetch('{% url "scheduler:omni_search_api" %}?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.results || data.results.length === 0) {
+          omniResults.innerHTML = '<div class="p-6 text-center text-xs text-slate-400">No matching divisions, teachers, or rooms found.</div>';
+          return;
+        }
+        var html = '';
+        data.results.forEach(function (item) {
+          html += '<a href="' + item.url + '" class="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition group">' +
+                    '<div class="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">' +
+                      '<i class="fa-solid ' + item.icon + ' text-xs"></i>' +
+                    '</div>' +
+                    '<div class="min-w-0 flex-1">' +
+                      '<div class="text-xs font-bold text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">' + item.title + '</div>' +
+                      '<div class="text-[11px] text-slate-400 dark:text-slate-500 truncate">' + item.subtitle + '</div>' +
+                    '</div>' +
+                    '<span class="text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-500">' + item.category + '</span>' +
+                  '</a>';
+        });
+        omniResults.innerHTML = html;
+      })
+      .catch(function () {
+        omniResults.innerHTML = '<div class="p-4 text-center text-xs text-rose-500">Error fetching search results.</div>';
+      });
+  }, 200);
+});
+
+// Native dialog confirmation handler with loading states
 (function () {
   var dialog = document.createElement('dialog');
   dialog.className = 'js-confirm-dialog';
   dialog.innerHTML =
-    '<div class="p-5">' +
-      '<div class="flex items-start gap-3">' +
-        '<span class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 grid place-items-center shrink-0">' +
+    '<div class="p-6">' +
+      '<div class="flex items-start gap-4">' +
+        '<span class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 grid place-items-center shrink-0 text-lg shadow-sm">' +
           '<i class="fa-solid fa-triangle-exclamation"></i>' +
         '</span>' +
         '<div class="min-w-0">' +
-          '<h3 class="text-sm font-extrabold text-slate-900">Are you sure?</h3>' +
-          '<p class="text-xs text-slate-600 mt-1 leading-relaxed js-confirm-message"></p>' +
+          '<h3 class="text-base font-extrabold text-slate-900 dark:text-white">Are you sure?</h3>' +
+          '<p class="text-xs text-slate-600 dark:text-slate-300 mt-1.5 leading-relaxed js-confirm-message"></p>' +
         '</div>' +
       '</div>' +
-      '<div class="mt-5 flex gap-2 justify-end">' +
+      '<div class="mt-6 flex gap-2.5 justify-end">' +
         '<button type="button" class="btn-ghost !text-xs js-cancel">Cancel</button>' +
         '<button type="button" class="btn-primary !text-xs js-confirm-ok">Yes, continue</button>' +
       '</div>' +
@@ -201,7 +400,6 @@
   });
   dialog.addEventListener('cancel', function () { pendingForm = null; });
 
-  // Show a loading state on submit so a slow solver run never looks frozen.
   function showBusy(form, button) {
     if (!button) { return; }
     var label = button.getAttribute('data-loading');
@@ -217,7 +415,6 @@
     pendingForm = null;
     if (!form) { return; }
     dialog.close();
-    // Bypass the confirm handler on the resubmission.
     form.removeAttribute('data-confirm');
     showBusy(form, form.querySelector('button[data-loading]') || form.querySelector('button[type=submit]'));
     form.submit();
