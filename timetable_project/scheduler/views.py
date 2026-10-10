@@ -150,6 +150,7 @@ def login_view(request):
             "form": form,
             "next": next_url or "",
             "divisions": YearDivision.objects.all().order_by("year", "division_number"),
+            "teachers": Teacher.objects.filter(user__isnull=False).select_related("user").order_by("name"),
         },
     )
 
