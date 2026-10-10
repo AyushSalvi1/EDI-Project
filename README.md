@@ -600,22 +600,35 @@ The application will be live at:
 ### 4. Division Timetable Grid (`/timetable/`)
 
 - Dropdown selector for **Semester** and **Year & Division** (e.g. _1st Year - Division 2_).
-- Renders a clean Day $\times$ Period table:
+- Renders an interactive Day $\times$ Period table:
   - **Columns**: Monday through Saturday (configured working days).
   - **Rows**: Period 1 through Period $N$ with time boundaries.
   - **Cells**: Course Name, Lab indicator badge, Teacher Name, Room Name, and Room Capacity.
+  - **Interactive Popover Modal**: Click any lecture or lab slot to inspect complete course codes, classroom venue, capacity limits, and time slots without leaving the page.
+  - **1-Click iCalendar (`.ics`) Sync**: Export division or personal timetable directly to Google Calendar, Apple Calendar, and Outlook with weekly recurrence rules (`RRULE`).
 - Built-in **Print / PDF** button with print stylesheet hiding navigation chrome,
   plus direct PDF downloads for this division, all divisions, faculty load, and
   the issues report.
 
-### 5. Capacity Report (`/capacity/`)
+### 5. Universal Omni-Search (`Ctrl + K`)
+
+- Universal command palette triggered instantly with **`Ctrl + K`** (or **`Cmd + K`**).
+- Real-time auto-complete search across Year Divisions, Faculty members, Subjects/Courses, and Classrooms/Labs with direct jump navigation links.
+
+### 6. Modern Aesthetic UI & Dark Mode
+
+- **Theme Toggle**: Smooth light and dark mode toggle with persistent preference saved across sessions.
+- **Glassmorphism & Micro-animations**: Frosted glass cards, smooth elevation transitions (`fade-in`, `slide-up`), and distinct color branding for Theory (Indigo) vs Laboratory sessions (Purple).
+- **Role-Based Portals**: Tailored interfaces for Administrators, Teachers (`/my-timetable/`), and Students with subject breakdown metrics.
+
+### 7. Capacity Report (`/capacity/`)
 
 - Reports whether the college is physically schedulable **before** the solver runs.
 - Separates blocking findings (impossible as specified) from warnings and notes.
 - Tables room supply vs demand, division strength coverage, and utilisation.
 - Links straight into attempting generation, for colleges that are tight but feasible.
 
-### 6. Faculty Management & Instant Regeneration in Django Admin
+### 8. Faculty Management & Instant Regeneration in Django Admin
 
 - Navigate to `/admin/scheduler/assignment/`.
 - Replace a teacher on any assignment.
