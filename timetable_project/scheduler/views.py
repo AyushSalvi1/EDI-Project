@@ -1560,3 +1560,161 @@ def omni_search_api(request):
 
     return JsonResponse({"results": results})
 
+
+# ===========================================================================
+# Advanced Interactive Drag & Drop / Instant Live Swap API
+# ===========================================================================
+@admin_required
+def live_move_api(request):
+    """
+    Ajax endpoint for interactive drag-and-drop or slot reassignment.
+    Re-validates all hard solver constraints instantly and returns JSON.
+    """
+    from django.http import JsonResponse
+
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST required"}, status=405)
+
+    entry_id = request.POST.get("entry_id")
+    target_slot_id = request.POST.get("target_slot_id")
+    target_room_id = request.POST.get("target_room_id")
+
+    entry = TimetableEntry.objects.filter(pk=entry_id).select_related(
+        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+    ).first()
+    if not entry:
+        return JsonResponse({"success": False, "error": "Entry not found."}, status=404)
+
+    target_slot = TimeSlot.objects.filter(pk=target_slot_id).first()
+    if not target_slot:
+        return JsonResponse({"success": False, "error": "Target time slot not found."}, status=404)
+
+    target_room = Room.objects.filter(pk=target_room_id).first() if target_room_id else entry.room
+    if not target_room:
+        return JsonResponse({"success": False, "error": "Target room not found."}, status=404)
+
+    _, conflicts = move_entry(entry, target_slot, target_room, user=request.user)
+    if conflicts:
+        return JsonResponse({"success": False, "conflicts": conflicts}, status=400)
+
+    return JsonResponse({
+        "success": True,
+        "message": f"Moved {entry.assignment.subject.name} to {target_slot.slot_code} in {target_room.name}.",
+        "entry_id": entry.id,
+        "new_slot": target_slot.slot_code,
+        "new_room": target_room.name,
+    })
+
+
+@admin_required
+def live_swap_api(request):
+    """
+    Ajax endpoint for instant two-slot exchange with solver constraint check.
+    """
+    from django.http import JsonResponse
+
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "POST required"}, status=405)
+
+    entry_a_id = request.POST.get("entry_a_id")
+    entry_b_id = request.POST.get("entry_b_id")
+
+    entry_a = TimetableEntry.objects.filter(pk=entry_a_id).select_related(
+        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+    ).first()
+    entry_b = TimetableEntry.objects.filter(pk=entry_b_id).select_related(
+        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+    ).first()
+
+    if not entry_a or not entry_b:
+        return JsonResponse({"success": False, "error": "Both entries must exist to swap."}, status=400)
+
+    ok, conflicts = swap_entries(entry_a, entry_b, user=request.user)
+    if not ok:
+        return JsonResponse({"success": False, "conflicts": conflicts}, status=400)
+
+    return JsonResponse({
+        "success": True,
+        "message": f"Successfully swapped '{entry_a.assignment.subject.name}' and '{entry_b.assignment.subject.name}'.",
+    })
+
+
+# ===========================================================================
+# Advanced Faculty Substitution & Workload Analytics API
+# ===========================================================================
+@admin_required
+def faculty_substitution_api(request):
+    """
+    Finds available substitute teachers for an entry or time slot.
+    Checks teacher unavailability, current period commitments, and max hours.
+    """
+    from django.http import JsonResponse
+
+    entry_id = request.GET.get("entry_id")
+    slot_id = request.GET.get("slot_id")
+
+    entry = TimetableEntry.objects.filter(pk=entry_id).select_related("assignment", "time_slot", "room").first()
+    if entry:
+        slot = entry.time_slot
+        semester = entry.semester
+        original_teacher = entry.assignment.teacher
+    elif slot_id:
+        slot = TimeSlot.objects.filter(pk=slot_id).first()
+        semester = Semester.objects.order_by("-start_date").first()
+        original_teacher = None
+    else:
+        return JsonResponse({"success": False, "error": "entry_id or slot_id required."}, status=400)
+
+    if not slot or not semester:
+        return JsonResponse({"success": False, "error": "Time slot or semester not found."}, status=404)
+
+    # Busy teachers during this slot
+    busy_teachers = set(
+        TimetableEntry.objects.filter(semester=semester, time_slot=slot)
+        .values_list("assignment__teacher_id", flat=True)
+    )
+    # Unavailable teachers
+    from .models import TeacherUnavailability
+    unavailable_teachers = set(
+        TeacherUnavailability.objects.filter(time_slot=slot)
+        .values_list("teacher_id", flat=True)
+    )
+
+    candidates = []
+    for teacher in Teacher.objects.all():
+        if original_teacher and teacher.id == original_teacher.id:
+            continue
+        is_busy = teacher.id in busy_teachers
+        is_unavailable = teacher.id in unavailable_teachers
+
+        current_hours = TimetableEntry.objects.filter(semester=semester, assignment__teacher=teacher).count()
+        remaining_hours = max(0, teacher.max_hours_per_week - current_hours)
+
+        status = "Available"
+        if is_busy:
+            status = "Busy teaching another division"
+        elif is_unavailable:
+            status = "Marked unavailable"
+        elif remaining_hours <= 0:
+            status = "Workload capped"
+
+        candidates.append({
+            "id": teacher.id,
+            "name": teacher.name,
+            "current_hours": current_hours,
+            "max_hours": teacher.max_hours_per_week,
+            "eligible": not is_busy and not is_unavailable and remaining_hours > 0,
+            "status": status,
+        })
+
+    # Sort candidates: eligible first, then lowest workload
+    candidates.sort(key=lambda c: (not c["eligible"], c["current_hours"]))
+
+    return JsonResponse({
+        "success": True,
+        "slot": slot.slot_code,
+        "time": f"{slot.start_time.strftime('%H:%M')} - {slot.end_time.strftime('%H:%M')}",
+        "substitutes": candidates,
+    })
+
+

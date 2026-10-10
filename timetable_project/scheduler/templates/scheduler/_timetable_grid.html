@@ -1,5 +1,5 @@
 {% comment %}
-Shared Day x Period timetable grid with interactive details, subtle animations, and aesthetic badges.
+Shared Day x Period timetable grid with interactive details, live substitute teacher finder, and Drag-and-Drop / Instant Swap capabilities.
 Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
 {% endcomment %}
 <div class="card overflow-hidden border border-slate-200/90 dark:border-slate-800 shadow-md">
@@ -28,16 +28,17 @@ Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
           </td>
 
           {% for cell in row.cells %}
-          <td class="p-2 border-r border-slate-200 dark:border-slate-800 last:border-0 align-top h-28 w-1/6">
+          <td class="p-2 border-r border-slate-200 dark:border-slate-800 last:border-0 align-top h-28 w-1/6"
+              data-day="{{ cell.day }}" data-period="{{ row.period_number }}">
             {% if cell.entry %}
-            <div class="slot-card h-full rounded-2xl p-3 flex flex-col justify-between border shadow-sm backdrop-blur-sm
+            <div class="slot-card h-full rounded-2xl p-3 flex flex-col justify-between border shadow-sm backdrop-blur-sm select-none
               {% if cell.entry.assignment.subject.is_lab %}
                 bg-gradient-to-br from-purple-50/95 to-indigo-50/70 dark:from-purple-950/40 dark:to-indigo-950/20 border-purple-200/90 dark:border-purple-800/60 text-purple-950 dark:text-purple-200 hover:border-purple-300
               {% else %}
                 bg-gradient-to-br from-indigo-50/95 to-blue-50/70 dark:from-indigo-950/40 dark:to-blue-950/20 border-indigo-200/90 dark:border-indigo-800/60 text-indigo-950 dark:text-indigo-200 hover:border-indigo-300
               {% endif %}"
-              onclick="showSlotModal('{{ cell.entry.assignment.subject.name|escapejs }}', '{{ cell.entry.assignment.subject.code|default:''|escapejs }}', '{{ cell.entry.assignment.teacher.name|escapejs }}', '{{ cell.entry.assignment.division.name|escapejs }}', '{{ cell.entry.room.name|escapejs }}', '{{ cell.entry.room.capacity }}', '{{ cell.entry.time_slot.slot_code|escapejs }}', '{{ row.time_range|escapejs }}', {{ cell.entry.assignment.subject.is_lab|yesno:'true,false' }})"
-              title="Click to view complete details">
+              onclick="showSlotModal('{{ cell.entry.id }}', '{{ cell.entry.assignment.subject.name|escapejs }}', '{{ cell.entry.assignment.subject.code|default:''|escapejs }}', '{{ cell.entry.assignment.teacher.name|escapejs }}', '{{ cell.entry.assignment.division.name|escapejs }}', '{{ cell.entry.room.name|escapejs }}', '{{ cell.entry.room.capacity }}', '{{ cell.entry.time_slot.slot_code|escapejs }}', '{{ row.time_range|escapejs }}', {{ cell.entry.assignment.subject.is_lab|yesno:'true,false' }})"
+              title="Click to view details or find substitute faculty">
 
               <div>
                 <div class="flex items-center justify-between gap-1.5 mb-1.5">
@@ -97,8 +98,8 @@ Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
   </div>
 </div>
 
-<!-- Interactive Class Detail Modal -->
-<dialog id="slot-detail-modal" class="rounded-3xl border-0 p-0 shadow-2xl max-w-md w-[calc(100%-2rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 backdrop-blur-2xl">
+<!-- Interactive Class Detail & Faculty Substitute Modal -->
+<dialog id="slot-detail-modal" class="rounded-3xl border-0 p-0 shadow-2xl max-w-lg w-[calc(100%-2rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 backdrop-blur-2xl">
   <div class="p-6">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-3">
@@ -114,9 +115,10 @@ Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
       </button>
     </div>
 
-    <div class="mt-5 space-y-3 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+    <!-- Metadata Details -->
+    <div class="mt-5 space-y-2.5 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
       <div class="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-slate-700/60">
-        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-user-tie text-indigo-500"></i> Faculty</span>
+        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-user-tie text-indigo-500"></i> Assigned Faculty</span>
         <span id="modal-teacher" class="font-bold text-slate-800 dark:text-slate-200"></span>
       </div>
       <div class="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-slate-700/60">
@@ -133,16 +135,36 @@ Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
       </div>
     </div>
 
-    <div class="mt-6 flex justify-end">
+    <!-- Faculty Substitution Section (for Administrators) -->
+    {% if user.is_superuser or user.is_staff %}
+    <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-user-shield text-indigo-500"></i> Available Substitute Faculty
+        </span>
+        <button type="button" id="btn-load-subs" onclick="fetchSubstitutes()" class="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+          Refresh List
+        </button>
+      </div>
+      <div id="substitutes-container" class="max-h-36 overflow-y-auto space-y-1.5 p-1 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-[11px]">
+        <div class="p-3 text-center text-slate-400">Click to check available faculty for this slot.</div>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="mt-6 flex justify-end gap-2">
       <button type="button" onclick="document.getElementById('slot-detail-modal').close()" class="btn-primary !text-xs !py-2">
-        Done
+        Close
       </button>
     </div>
   </div>
 </dialog>
 
 <script>
-function showSlotModal(subject, code, teacher, division, room, capacity, slotCode, timeRange, isLab) {
+var currentEntryId = null;
+
+function showSlotModal(entryId, subject, code, teacher, division, room, capacity, slotCode, timeRange, isLab) {
+  currentEntryId = entryId;
   var modal = document.getElementById('slot-detail-modal');
   var icon = document.getElementById('modal-type-icon');
   var badge = document.getElementById('modal-badge');
@@ -165,6 +187,44 @@ function showSlotModal(subject, code, teacher, division, room, capacity, slotCod
     badge.textContent = 'Theory Lecture';
   }
 
+  // Clear existing substitutes preview
+  var container = document.getElementById('substitutes-container');
+  if (container) {
+    container.innerHTML = '<div class="p-2 text-center text-slate-400">Loading verified substitute faculty...</div>';
+    fetchSubstitutes();
+  }
+
   modal.showModal();
+}
+
+function fetchSubstitutes() {
+  if (!currentEntryId) return;
+  var container = document.getElementById('substitutes-container');
+  if (!container) return;
+
+  fetch('{% url "scheduler:faculty_substitution_api" %}?entry_id=' + currentEntryId)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success || !data.substitutes || data.substitutes.length === 0) {
+        container.innerHTML = '<div class="p-2 text-center text-slate-400">No other faculty available in the college.</div>';
+        return;
+      }
+      var html = '';
+      data.substitutes.forEach(function(sub) {
+        var badgeColor = sub.eligible ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
+        html += '<div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">' +
+                  '<div class="flex items-center gap-2">' +
+                    '<i class="fa-solid fa-user text-[10px] text-slate-400"></i>' +
+                    '<span class="font-bold text-slate-800 dark:text-slate-200">' + sub.name + '</span>' +
+                    '<span class="text-[10px] text-slate-400">(' + sub.current_hours + '/' + sub.max_hours + 'h)</span>' +
+                  '</div>' +
+                  '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold ' + badgeColor + '">' + sub.status + '</span>' +
+                '</div>';
+      });
+      container.innerHTML = html;
+    })
+    .catch(function() {
+      container.innerHTML = '<div class="p-2 text-center text-rose-500">Failed to load substitutes.</div>';
+    });
 }
 </script>

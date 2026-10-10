@@ -56,4 +56,7 @@ urlpatterns = [
     # Advanced Features: iCalendar sync & Omni-Search
     path('export/ical/', views.export_ical_view, name='export_ical'),
     path('api/search/', views.omni_search_api, name='omni_search_api'),
+    path('api/live-move/', views.live_move_api, name='live_move_api'),
+    path('api/live-swap/', views.live_swap_api, name='live_swap_api'),
+    path('api/substitution/', views.faculty_substitution_api, name='faculty_substitution_api'),
 ]

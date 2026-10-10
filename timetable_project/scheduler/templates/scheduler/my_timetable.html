@@ -106,6 +106,76 @@
     </div>
   </div>
 
+  <!-- Real-Time "Now & Next" Live Lecture Widget -->
+  <div class="card p-4 sm:p-5 border-l-4 border-l-indigo-500 bg-gradient-to-r from-indigo-50/60 via-white to-white dark:from-indigo-950/20 dark:via-slate-900/60 dark:to-slate-900/80 shadow-sm">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5">
+        <span class="w-10 h-10 rounded-xl bg-indigo-600 text-white grid place-items-center text-sm shadow-md shadow-indigo-600/30">
+          <i class="fa-solid fa-satellite-dish animate-pulse"></i>
+        </span>
+        <div>
+          <span class="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Live Academic Status
+          </span>
+          <p id="live-session-status" class="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white mt-0.5">
+            Calculating current lecture session...
+          </p>
+        </div>
+      </div>
+      <div id="live-next-session" class="text-right text-[11px] text-slate-500 dark:text-slate-400">
+        <span class="font-bold text-slate-700 dark:text-slate-300">Next Upcoming Class:</span>
+        <span id="next-class-label" class="italic ml-1">Checking schedule...</span>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Dynamic Real-Time Class Status Indicator
+  (function() {
+    var days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    var now = new Date();
+    var todayCode = days[now.getDay()];
+    var currentMins = now.getHours() * 60 + now.getMinutes();
+
+    var entriesData = [
+      {% for entry in entries %}
+      {
+        day: '{{ entry.time_slot.day }}',
+        subject: '{{ entry.assignment.subject.name|escapejs }}',
+        room: '{{ entry.room.name|escapejs }}',
+        startMins: {{ entry.time_slot.start_time.hour }} * 60 + {{ entry.time_slot.start_time.minute }},
+        endMins: {{ entry.time_slot.end_time.hour }} * 60 + {{ entry.time_slot.end_time.minute }},
+        startTime: '{{ entry.time_slot.start_time|time:"H:i" }}',
+        endTime: '{{ entry.time_slot.end_time|time:"H:i" }}',
+        isLab: {{ entry.assignment.subject.is_lab|yesno:"true,false" }}
+      },
+      {% endfor %}
+    ];
+
+    var todays = entriesData.filter(function(e) { return e.day === todayCode; });
+    todays.sort(function(a, b) { return a.startMins - b.startMins; });
+
+    var activeClass = todays.find(function(e) { return currentMins >= e.startMins && currentMins < e.endMins; });
+    var nextClass = todays.find(function(e) { return e.startMins > currentMins; });
+
+    var statusEl = document.getElementById('live-session-status');
+    var nextEl = document.getElementById('next-class-label');
+
+    if (activeClass) {
+      var remaining = activeClass.endMins - currentMins;
+      statusEl.innerHTML = '<span class="text-emerald-600 dark:text-emerald-400">ONGOING NOW:</span> ' + activeClass.subject + ' in ' + activeClass.room + ' (' + remaining + ' mins remaining)';
+    } else {
+      statusEl.innerHTML = '<span class="text-slate-500">No active lecture at this moment</span> (College hours: Mon–Fri)';
+    }
+
+    if (nextClass) {
+      nextEl.textContent = nextClass.subject + ' @ ' + nextClass.startTime + ' in ' + nextClass.room;
+    } else {
+      nextEl.textContent = todays.length > 0 ? 'No more classes scheduled for today.' : 'No sessions today.';
+    }
+  })();
+  </script>
+
   <!-- Weekly Subject Breakdown Chips -->
   {% if hours_by_subject %}
   <div class="card p-5 no-print bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl">
