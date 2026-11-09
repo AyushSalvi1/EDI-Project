@@ -288,6 +288,13 @@ def _build_reassign_proposal(semester, issue, cause):
     assignment = issue.assignment
     shortlist = []
     for candidate in Teacher.objects.exclude(pk=assignment.teacher_id):
+        if Assignment.objects.filter(
+            semester=semester,
+            teacher=candidate,
+            subject=assignment.subject,
+            division=assignment.division,
+        ).exists():
+            continue
         load = sum(
             a.weekly_hours() for a in Assignment.objects.filter(
                 semester=semester, teacher=candidate

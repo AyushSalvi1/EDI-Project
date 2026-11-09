@@ -27,13 +27,9 @@ SECRET_KEY = os.environ.get(
 )
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DJANGO_DEBUG', 'False').lower() in {'1', 'true', 'yes', 'on'}
+DEBUG = os.environ.get('DJANGO_DEBUG', 'True').lower() in {'1', 'true', 'yes', 'on'}
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,[::1]').split(',')
-    if host.strip()
-]
+ALLOWED_HOSTS = ['*']
 
 LOGIN_URL = 'scheduler:login'
 LOGIN_REDIRECT_URL = 'scheduler:home'
@@ -53,6 +49,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'django.middleware.gzip.GZipMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -128,17 +125,15 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'scheduler' / 'static',
+]
 
 
-# Email
-# https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
+# In-App Portal Notification Configuration (Primary alerting channel)
+DEFAULT_FROM_EMAIL = 'webmaster@localhost'
 
-MAILERS = {
-    'default': {
-        'BACKEND': 'django.core.mail.backends.smtp.EmailBackend',
-    },
-}
 
 LOGGING = {
     'version': 1,

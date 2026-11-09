@@ -5,24 +5,25 @@
 {% block content %}
 <div class="max-w-2xl mx-auto space-y-6">
 
-  <div class="card p-6 sm:p-8 text-center">
-    <div class="w-12 h-12 rounded-2xl bg-rose-100 flex items-center justify-center mx-auto mb-4">
-      <i class="fa-solid fa-triangle-exclamation text-rose-500 text-lg"></i>
+  <div class="card p-6 sm:p-8 text-center bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <div class="w-12 h-12 rounded-xl bg-rose-950/60 border border-rose-800 flex items-center justify-center mx-auto mb-4 text-rose-400 text-lg shadow-sm">
+      <i class="fa-solid fa-triangle-exclamation"></i>
     </div>
-    <h1 class="text-lg font-extrabold text-slate-900">Remove this scheduled class?</h1>
-    <p class="text-xs text-slate-500 mt-2">
-      The period will become free for that division. Re-running the solver can redistribute the hours.
+    <span class="status-pill-indigo mb-2 !text-[10px]">Deallocation Request</span>
+    <h1 class="text-xl font-extrabold text-[#F8FAFC] tracking-tight mt-1">Remove Scheduled Period?</h1>
+    <p class="text-xs text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+      This slot will be immediately deallocated and freed for the division. Respective faculty and students will receive an instant portal notification informing them of the class cancellation.
     </p>
   </div>
 
-  <div class="card p-4 sm:p-5">
-    <p class="text-[11px] font-semibold text-slate-600 uppercase mb-2">Class to be removed</p>
-    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-      <p class="text-sm font-bold text-slate-900">{{ entry.assignment.subject.name }}
-        {% if entry.assignment.subject.is_lab %}<span class="text-purple-600 text-xs">(Lab)</span>{% endif %}
+  <div class="card p-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Target Allocation</p>
+    <div class="p-4 rounded-xl bg-[#0F172A] border border-slate-800">
+      <p class="text-sm font-bold text-[#F8FAFC]">{{ entry.assignment.subject.name }}
+        {% if entry.assignment.subject.is_lab %}<span class="status-pill-cyan !text-[8px] !py-0.2 !px-1.5 ml-1">LAB</span>{% endif %}
       </p>
-      <p class="text-xs text-slate-600 mt-1">{{ entry.assignment.division.name }} &bull; {{ entry.assignment.teacher.name }}</p>
-      <p class="text-xs font-mono text-slate-500 mt-0.5">
+      <p class="text-xs text-slate-400 mt-1">{{ entry.assignment.division.name }} &bull; {{ entry.assignment.teacher.name }}</p>
+      <p class="text-xs font-mono text-cyan-400/90 mt-1">
         {{ entry.time_slot.slot_code }} &bull;
         {{ entry.time_slot.start_time|time:"H:i" }}&ndash;{{ entry.time_slot.end_time|time:"H:i" }}
         &bull; {{ entry.room.name }}
@@ -30,12 +31,12 @@
     </div>
   </div>
 
-  <form method="POST" class="flex flex-wrap gap-2">
+  <form method="POST" class="flex flex-wrap gap-2.5">
     {% csrf_token %}
-    <button type="submit" class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm shadow transition">
-      <i class="fa-solid fa-trash"></i> Yes, remove it
+    <button type="submit" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-lg shadow-rose-900/30 transition">
+      <i class="fa-solid fa-trash"></i> Confirm Deallocation &amp; Notify Portal
     </button>
-    <a href="{% url 'scheduler:manage_entries' %}?semester_id={{ entry.semester_id }}" class="btn-ghost">
+    <a href="{% url 'scheduler:manage_entries' %}?semester_id={{ entry.semester_id }}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">
       <i class="fa-solid fa-xmark"></i> Cancel
     </a>
   </form>

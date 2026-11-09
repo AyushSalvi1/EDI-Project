@@ -6,55 +6,69 @@
 {% block content %}
 <div class="space-y-6">
 
-  <div class="card p-4 sm:p-6">
-    <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-      <i class="fa-solid fa-file-pdf text-rose-600"></i> Import College Data from PDF
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <div class="flex items-center gap-2 mb-1.5">
+      <span class="status-pill-indigo !text-[10px]">
+        <span class="status-dot-cyan"></span> PDF Document Ingestion
+      </span>
+    </div>
+    <h1 class="text-xl sm:text-2xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+      <i class="fa-solid fa-file-pdf text-rose-400"></i> Import College Data from PDF
     </h1>
-    <p class="text-xs sm:text-sm text-slate-500 mt-1">
-      Upload the college's timetable PDF. Every ruled table is detected automatically &mdash;
-      calendars, rooms, subjects and the faculty/subject/division allocation grid &mdash; and
-      you can correct the mapping before anything is written to the database.
+    <p class="text-xs sm:text-sm text-slate-400 mt-1">
+      Upload the institutional timetable PDF. Academic calendars, venues, courses, and teaching allocation matrices are extracted with interactive pre-commit schema mapping.
     </p>
   </div>
 
   <!-- STEP 1 -->
   {% if not tables %}
-  <form method="POST" enctype="multipart/form-data" class="card p-4 sm:p-6 space-y-4">
+  <form method="POST" enctype="multipart/form-data" class="card p-6 sm:p-8 space-y-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     {% csrf_token %}
     <input type="hidden" name="stage" value="extract">
 
     <div>
-      <label for="pdf_file" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">PDF File</label>
-      <input type="file" name="pdf_file" id="pdf_file" accept="application/pdf,.pdf" required
-             class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-      <p class="text-[11px] text-slate-400 mt-1.5">Maximum 25 MB. The PDF must contain selectable text, not a scanned image.</p>
+      <label for="pdf_file" class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2">Select Institutional PDF Document</label>
+      <div class="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center hover:border-cyan-400 transition bg-[#0F172A]/60">
+        <i class="fa-solid fa-file-pdf text-rose-400 text-4xl mb-3"></i>
+        <p class="text-sm font-semibold text-[#F8FAFC]">Choose an academic timetable or faculty allocation PDF</p>
+        <p class="text-xs text-slate-400 mt-1">Maximum 25 MB. Selectable vector text format required.</p>
+        <input type="file" name="pdf_file" id="pdf_file" accept="application/pdf,.pdf" required
+               class="mt-4 block mx-auto text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
+      </div>
     </div>
 
-    <button type="submit" class="btn-primary">
-      <i class="fa-solid fa-magnifying-glass-chart"></i> Read PDF
-    </button>
+    <div class="pt-2">
+      <button type="submit" class="btn-primary !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-indigo-sm font-bold">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Read &amp; Parse Document Tables
+      </button>
+    </div>
   </form>
 
-  <div class="card p-4 sm:p-5">
-    <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">What the importer understands</h2>
-    <div class="grid md:grid-cols-2 gap-4 text-[11px] text-slate-600">
-      <div>
-        <p class="font-bold text-slate-800 mb-1.5">Academic calendar</p>
-        <ul class="space-y-1 list-disc list-inside">
-          <li>Semester / session name and dates (<em>03 Aug 2026</em>, <em>2026-08-03</em>, <em>03/08/2026</em>)</li>
-          <li>Working days, including ranges like <em>Monday to Friday</em></li>
-          <li>College timings, including 12-hour forms like <em>09:00 am to 05:00 pm</em></li>
-          <li>Period duration and lunch break</li>
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+    <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wide mb-3 flex items-center gap-2">
+      <i class="fa-solid fa-circle-info text-cyan-400"></i> Parsing Capabilities &amp; Document Intelligence
+    </h2>
+    <div class="grid md:grid-cols-2 gap-4 text-xs text-slate-400">
+      <div class="p-4 rounded-xl bg-[#0F172A] border border-slate-800">
+        <p class="font-bold text-[#F8FAFC] mb-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-calendar-days text-cyan-400"></i> Academic Calendar Parser
+        </p>
+        <ul class="space-y-1.5 list-disc list-inside text-slate-300">
+          <li>Semester / session titles and ISO/conventional dates</li>
+          <li>Working day intervals (e.g. <em>Monday to Friday</em>)</li>
+          <li>Timings and 12-hour timestamps (e.g. <em>09:00 am to 05:00 pm</em>)</li>
+          <li>Period duration and lunch window bounds</li>
         </ul>
       </div>
-      <div>
-        <p class="font-bold text-slate-800 mb-1.5">Teaching grid</p>
-        <ul class="space-y-1 list-disc list-inside">
-          <li>Teacher, subject, year, division and semester hours in any column order</li>
-          <li>Division strength and per-teacher weekly limits</li>
-          <li>Lab subjects marked <em>Lab</em>, <em>Practical</em>, <em>P</em> or <em>Theory</em></li>
-          <li>Teacher unavailability such as <em>MON-P2</em> or <em>Monday Period 2</em></li>
-          <li>Tables that continue across page breaks are rejoined automatically</li>
+      <div class="p-4 rounded-xl bg-[#0F172A] border border-slate-800">
+        <p class="font-bold text-[#F8FAFC] mb-2 flex items-center gap-1.5">
+          <i class="fa-solid fa-table-cells text-indigo-400"></i> Faculty Allocation Grid
+        </p>
+        <ul class="space-y-1.5 list-disc list-inside text-slate-300">
+          <li>Faculty, subject, year cohort, division and semester loads</li>
+          <li>Division strengths and faculty weekly max hour thresholds</li>
+          <li>Lab classifications (e.g. <em>Lab</em>, <em>Practical</em>, <em>P</em>)</li>
+          <li>Automatic rejoining of multi-page spanning tables</li>
         </ul>
       </div>
     </div>
@@ -67,37 +81,39 @@
     <input type="hidden" name="stage" value="import">
     <input type="hidden" name="tables_json" value="{{ tables_json }}">
 
-    <div class="card p-4 sm:p-6">
-      <div class="flex items-center justify-between gap-4">
-        <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide">1. Detected Tables</h2>
-        <a href="{% url 'scheduler:upload_pdf' %}" class="btn-ghost !text-xs !py-1.5">
-          <i class="fa-solid fa-rotate-left"></i> Start over with a different PDF
-        </a>
+    <div class="card p-5 sm:p-6 flex items-center justify-between gap-4 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+      <div>
+        <h2 class="text-sm font-bold text-[#F8FAFC] uppercase tracking-wide flex items-center gap-2">
+          <i class="fa-solid fa-table text-cyan-400"></i> 1. Detected Tables
+        </h2>
+        <p class="text-xs text-slate-400 mt-1">
+          Review extracted tabular data. Verify role assignments and field mappings prior to ingestion.
+        </p>
       </div>
-      <p class="text-[11px] text-slate-500 mt-1">
-        Check each table's role. If a table was recognised as the wrong kind, change it below.
-      </p>
+      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-ghost !text-xs !py-1.5 !px-3 !rounded-xl">
+        <i class="fa-solid fa-rotate-left"></i> Re-upload Document
+      </a>
     </div>
 
     <div class="space-y-4">
       {% for table in tables %}
-      <div class="card p-4 sm:p-5">
+      <div class="card p-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
           <div>
-            <p class="text-xs font-bold text-slate-900">
+            <p class="text-xs font-bold text-[#F8FAFC]">
               Table {{ forloop.counter }} &mdash; page {{ table.page }}
-              <span class="font-normal text-slate-400">&bull; {{ table.row_count }} row{{ table.row_count|pluralize }}</span>
+              <span class="font-normal text-slate-400 font-mono">&bull; {{ table.row_count }} row{{ table.row_count|pluralize }}</span>
             </p>
             <p class="text-[10px] text-slate-400 font-mono mt-0.5 truncate max-w-full">{{ table.headers|join:" | " }}</p>
           </div>
           <div class="flex items-center gap-2">
-            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold
-              {% if table.mapping_confidence >= 70 %}bg-emerald-100 text-emerald-700
-              {% elif table.mapping_confidence >= 40 %}bg-amber-100 text-amber-700
-              {% else %}bg-rose-100 text-rose-700{% endif %}">
-              {{ table.mapping_confidence }}% matched
+            <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold border
+              {% if table.mapping_confidence >= 70 %}bg-cyan-950 text-cyan-300 border-cyan-800
+              {% elif table.mapping_confidence >= 40 %}bg-amber-950 text-amber-300 border-amber-800
+              {% else %}bg-rose-950 text-rose-300 border-rose-800{% endif %}">
+              {{ table.mapping_confidence }}% confidence
             </span>
-            <select name="role_{{ table.index }}" class="rounded-lg border border-slate-300 px-2 py-1 text-[11px] bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+            <select name="role_{{ table.index }}" class="rounded-xl border border-slate-700 px-2.5 py-1 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
               {% for role_name in role_fields %}
               <option value="{{ role_name }}" {% if table.role == role_name %}selected{% endif %}>{{ role_name }}</option>
               {% endfor %}
@@ -107,14 +123,14 @@
 
         <!-- Column mapping -->
         {% if table.role in role_fields %}
-        <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
-          <p class="text-[10px] font-semibold text-slate-600 uppercase mb-2">Column mapping</p>
-          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+        <div class="p-3.5 rounded-xl bg-[#0F172A] border border-slate-800">
+          <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Column Data Binding</p>
+          <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
             {% for field in role_fields|get_item:table.role|field_names %}
             <div>
-              <label class="block text-[10px] font-semibold text-slate-600 mb-1">{{ field }}</label>
-              <select name="map_{{ table.index }}_{{ field }}" class="w-full rounded-lg border border-slate-300 px-2 py-1 text-[11px] bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-                <option value="">&mdash; not mapped &mdash;</option>
+              <label class="block text-[10px] font-bold text-slate-400 uppercase mb-1">{{ field }}</label>
+              <select name="map_{{ table.index }}_{{ field }}" class="w-full rounded-xl border border-slate-700 px-2 py-1 text-xs bg-[#1E293B] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
+                <option value="">&mdash; Unmapped &mdash;</option>
                 {% for h in table.headers %}
                 <option value="{{ forloop.counter0 }}" {% if table.mapping|get_item:field == forloop.counter0 %}selected{% endif %}>{{ h }}</option>
                 {% endfor %}
@@ -126,20 +142,20 @@
         {% endif %}
 
         <!-- Preview -->
-        <div class="mt-3 overflow-x-auto">
+        <div class="mt-3.5 overflow-x-auto">
           <table class="w-full text-left border-collapse text-[10px]">
             <thead>
-              <tr class="bg-slate-100">
+              <tr class="bg-[#0B1120] text-slate-400 uppercase font-mono">
                 {% for h in table.headers %}
-                <th class="p-1.5 border border-slate-200 font-semibold text-slate-600 whitespace-nowrap">{{ h }}</th>
+                <th class="p-2 border border-slate-800 font-semibold whitespace-nowrap">{{ h }}</th>
                 {% endfor %}
               </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-slate-800 bg-[#0F172A]/40 text-slate-300">
               {% for row in table.rows|slice:":5" %}
               <tr>
                 {% for cell in row %}
-                <td class="p-1.5 border border-slate-200 text-slate-600 whitespace-nowrap">{{ cell }}</td>
+                <td class="p-2 border border-slate-800 whitespace-nowrap font-mono">{{ cell }}</td>
                 {% endfor %}
               </tr>
               {% endfor %}
@@ -151,69 +167,71 @@
     </div>
 
     <!-- Calendar overrides -->
-    <div class="card p-4 sm:p-6">
-      <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wide mb-1">2. Calendar Details</h2>
-      <p class="text-[11px] text-slate-500 mb-4">
-        Anything found in the PDF is already filled in. Correct or override any value here.
+    <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+      <h2 class="text-sm font-bold text-[#F8FAFC] uppercase tracking-wide mb-1 flex items-center gap-2">
+        <i class="fa-solid fa-calendar-check text-cyan-400"></i> 2. Academic Calendar Ingestion Overrides
+      </h2>
+      <p class="text-xs text-slate-400 mb-4">
+        Values detected from document tables are prepopulated. Review or adjust values prior to database save.
       </p>
 
       <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">College Name</label>
-          <input type="text" name="college_name" value="{{ document_title }}" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">College Title</label>
+          <input type="text" name="college_name" value="{{ document_title }}" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Semester Name</label>
-          <input type="text" name="semester_name" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Semester Name</label>
+          <input type="text" name="semester_name" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Working Days</label>
-          <input type="text" name="working_days" placeholder="MON,TUE,WED,THU,FRI or Monday to Friday" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Working Days</label>
+          <input type="text" name="working_days" placeholder="MON,TUE,WED,THU,FRI or Monday to Friday" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Start Date</label>
-          <input type="text" name="start_date" placeholder="2026-08-03" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Start Date</label>
+          <input type="text" name="start_date" placeholder="2026-08-03" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">End Date</label>
-          <input type="text" name="end_date" placeholder="2026-11-20" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">End Date</label>
+          <input type="text" name="end_date" placeholder="2026-11-20" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Period Duration (min)</label>
-          <input type="number" name="period_duration_minutes" value="60" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Period Duration (min)</label>
+          <input type="number" name="period_duration_minutes" value="60" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">College Start</label>
-          <input type="text" name="daily_start_time" placeholder="09:00" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Daily Start Time</label>
+          <input type="text" name="daily_start_time" placeholder="09:00" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">College End</label>
-          <input type="text" name="daily_end_time" placeholder="17:00" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Daily End Time</label>
+          <input type="text" name="daily_end_time" placeholder="17:00" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Lunch Start</label>
-          <input type="text" name="lunch_start" placeholder="13:00" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Lunch Start Time</label>
+          <input type="text" name="lunch_start" placeholder="13:00" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Lunch End</label>
-          <input type="text" name="lunch_end" placeholder="14:00" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Lunch End Time</label>
+          <input type="text" name="lunch_end" placeholder="14:00" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Fallback Division Strength</label>
-          <input type="number" name="default_strength" value="60" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Default Division Strength</label>
+          <input type="number" name="default_strength" value="60" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Fallback Teacher Max h/wk</label>
-          <input type="number" name="default_max_hours" value="24" class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Default Teacher Weekly Max</label>
+          <input type="number" name="default_max_hours" value="24" class="w-full px-3 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
       </div>
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <button type="submit" class="btn-secondary">
-        <i class="fa-solid fa-circle-check"></i> Import These Tables
+    <div class="flex flex-wrap gap-2.5 pt-2">
+      <button type="submit" class="btn-cyan !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-cyan-sm font-bold">
+        <i class="fa-solid fa-circle-check"></i> Ingest &amp; Construct Database
       </button>
-      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-ghost">
+      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">
         <i class="fa-solid fa-xmark"></i> Cancel
       </a>
     </div>

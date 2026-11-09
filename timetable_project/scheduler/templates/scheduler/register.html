@@ -1,24 +1,27 @@
 {% extends "scheduler/base.html" %}
 
-{% block title %}Register | Automatic Timetable Generator{% endblock %}
+{% block title %}Student Registration | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
 <div class="min-h-[70vh] flex items-center justify-center py-6">
   <div class="w-full max-w-xl">
 
-    <div class="card p-6 sm:p-8">
+    <div class="card p-6 sm:p-8 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl relative">
       <div class="text-center mb-6">
-        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mx-auto shadow mb-3">
-          <i class="fa-solid fa-user-plus text-white text-lg"></i>
+        <div class="w-12 h-12 rounded-xl bg-cyan-950/60 border border-cyan-800 text-cyan-400 flex items-center justify-center mx-auto shadow-glow-cyan-sm mb-3 text-lg">
+          <i class="fa-solid fa-user-plus"></i>
         </div>
-        <h1 class="text-xl font-extrabold text-slate-900">Student Registration</h1>
-        <p class="text-xs text-slate-500 mt-1">Create a login to view your division's timetable</p>
+        <span class="status-pill-cyan mb-2 !text-[10px]">
+          <span class="status-dot-cyan"></span> Student Enrollment
+        </span>
+        <h1 class="text-xl font-extrabold text-[#F8FAFC] tracking-tight mt-1">Student Registration</h1>
+        <p class="text-xs text-slate-400 mt-1">Create an account to access personalized division schedules &amp; alerts</p>
       </div>
 
       {% if errors %}
-      <div class="mb-4 p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-medium">
+      <div class="mb-4 p-3.5 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-200 text-xs font-medium">
         <p class="font-bold flex items-center gap-2 mb-1.5">
-          <i class="fa-solid fa-circle-exclamation text-rose-500"></i> Please fix the following:
+          <i class="fa-solid fa-circle-exclamation text-rose-400"></i> Please resolve the following issues:
         </p>
         <ul class="list-disc list-inside space-y-0.5">
           {% for error in errors %}<li>{{ error }}</li>{% endfor %}
@@ -27,9 +30,9 @@
       {% endif %}
 
       {% if not divisions %}
-      <div class="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs">
-        <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
-        No divisions exist yet. An administrator must import college data before students can register.
+      <div class="mb-4 p-3.5 rounded-xl bg-amber-950/60 border border-amber-800 text-amber-200 text-xs">
+        <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+        No active divisions exist yet. An administrator must import college data before students can register.
       </div>
       {% endif %}
 
@@ -38,67 +41,67 @@
 
         <div class="grid sm:grid-cols-2 gap-4">
           <div>
-            <label for="full_name" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Full Name</label>
+            <label for="full_name" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Full Name</label>
             <input type="text" name="full_name" id="full_name" value="{{ form_data.full_name }}" required
-                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
           <div>
-            <label for="roll_number" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Roll Number</label>
+            <label for="roll_number" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Roll Number / PRN</label>
             <input type="text" name="roll_number" id="roll_number" value="{{ form_data.roll_number }}" required
-                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white font-mono focus:ring-2 focus:ring-indigo-500 outline-none">
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] font-mono focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
         </div>
 
         <div class="grid sm:grid-cols-2 gap-4">
           <div>
-            <label for="division_id" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Year &amp; Division</label>
+            <label for="division_id" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Year &amp; Division</label>
             <select name="division_id" id="division_id" required
-                    class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                    class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
               <option value="">-- Select your division --</option>
               {% for d in divisions %}
               <option value="{{ d.id }}" {% if form_data.division_id == d.id|stringformat:'s' %}selected{% endif %}>
-                {{ d.name }} (Strength: {{ d.strength }})
+                {{ d.name }} (Capacity: {{ d.strength }})
               </option>
               {% endfor %}
             </select>
           </div>
           <div>
-            <label for="email" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Email <span class="text-slate-400 normal-case">(optional)</span></label>
+            <label for="email" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Email <span class="text-slate-500 normal-case">(optional)</span></label>
             <input type="email" name="email" id="email" value="{{ form_data.email }}"
-                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
         </div>
 
-        <div class="h-px bg-slate-200 my-1"></div>
+        <div class="h-px bg-slate-800 my-1"></div>
 
         <div>
-          <label for="username" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Username</label>
+          <label for="username" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Portal Username</label>
           <input type="text" name="username" id="username" value="{{ form_data.username }}" required autocomplete="username"
-                 class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                 class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         </div>
 
         <div class="grid sm:grid-cols-2 gap-4">
           <div>
-            <label for="password1" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Password</label>
+            <label for="password1" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
             <input type="password" name="password1" id="password1" required autocomplete="new-password"
-                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
           <div>
-            <label for="password2" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Confirm Password</label>
+            <label for="password2" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Confirm Password</label>
             <input type="password" name="password2" id="password2" required autocomplete="new-password"
-                   class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                   class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
           </div>
         </div>
 
-        <button type="submit" class="btn-secondary w-full justify-center !py-2.5" {% if not divisions %}disabled{% endif %}>
-          <i class="fa-solid fa-circle-check"></i> Create My Account
+        <button type="submit" class="btn-primary w-full justify-center !py-2.5 !rounded-xl shadow-glow-indigo-sm font-bold" {% if not divisions %}disabled{% endif %}>
+          <i class="fa-solid fa-circle-check"></i> Complete Student Registration
         </button>
       </form>
 
-      <div class="mt-5 pt-4 border-t border-slate-200 text-center">
-        <p class="text-xs text-slate-500">
+      <div class="mt-5 pt-4 border-t border-slate-800 text-center">
+        <p class="text-xs text-slate-400">
           Already registered?
-          <a href="{% url 'scheduler:login' %}" class="font-semibold text-indigo-600 hover:text-indigo-700">Sign in</a>
+          <a href="{% url 'scheduler:login' %}" class="font-bold text-cyan-400 hover:text-cyan-300">Sign in to Portal</a>
         </p>
       </div>
     </div>

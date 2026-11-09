@@ -269,9 +269,11 @@ def home_view(request):
     )
     requested = 0
     if active_semester:
+        weeks = active_semester.number_of_weeks()
+        import math
         requested = sum(
-            assignment.weekly_hours()
-            for assignment in Assignment.objects.filter(semester=active_semester)
+            math.ceil(h / weeks)
+            for h in Assignment.objects.filter(semester=active_semester).values_list('total_hours_for_semester', flat=True)
         )
 
     context = {
@@ -335,7 +337,7 @@ def my_timetable_view(request):
 
     entries = list(
         entries_qs.select_related(
-            "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+            "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
         )
     )
     day_headers, grid_rows = _build_grid(entries, time_slots)
@@ -348,6 +350,12 @@ def my_timetable_view(request):
         for entry in entries:
             key = entry.assignment.subject.name
             hours_by_subject[key] = hours_by_subject.get(key, 0) + 1
+
+    unread_notifications = []
+    if user.is_authenticated:
+        unread_notifications = list(Notification.objects.filter(
+            recipient=user, is_read=False
+        ).order_by("-created_at")[:5])
 
     context = {
         "scope": scope,
@@ -363,6 +371,7 @@ def my_timetable_view(request):
         "hours_by_subject": hours_by_subject,
         "show_division": scope == "teacher",
         "show_teacher": scope == "student",
+        "unread_notifications": unread_notifications,
     }
     return render(request, "scheduler/my_timetable.html", context)
 
@@ -494,7 +503,7 @@ def timetable_view(request):
     time_slots = list(TimeSlot.objects.all())
 
     entries_qs = TimetableEntry.objects.select_related(
-        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+        "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
     )
     if selected_semester:
         entries_qs = entries_qs.filter(semester=selected_semester)
@@ -503,6 +512,13 @@ def timetable_view(request):
     entries = list(entries_qs)
 
     day_headers, grid_rows = _build_grid(entries, time_slots)
+
+    division_teachers = []
+    if selected_division and selected_semester:
+        division_teachers = list(Teacher.objects.filter(
+            assignments__division=selected_division,
+            assignments__semester=selected_semester
+        ).distinct().order_by("name"))
 
     context = {
         "semesters": semesters,
@@ -513,6 +529,8 @@ def timetable_view(request):
         "grid_rows": grid_rows,
         "show_division": True,
         "show_teacher": True,
+        "division_teachers": division_teachers,
+        "all_teachers": Teacher.objects.all().order_by("name"),
     }
     return render(request, "scheduler/timetable_view.html", context)
 
@@ -534,7 +552,7 @@ def manage_entries_view(request):
         semester = semesters.first()
 
     entries_qs = TimetableEntry.objects.select_related(
-        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+        "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
     )
     if semester:
         entries_qs = entries_qs.filter(semester=semester)
@@ -845,7 +863,7 @@ def delete_entry_view(request, pk):
     """Remove one scheduled class from the timetable."""
     entry = get_object_or_404(
         TimetableEntry.objects.select_related(
-            "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+            "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
         ),
         pk=pk,
     )
@@ -856,11 +874,17 @@ def delete_entry_view(request, pk):
         division = entry.assignment.division.name
         slot = entry.time_slot.slot_code
         room = entry.room.name
+        from .notifications import notify_respective_parties_of_slot_deletion
+        notify_respective_parties_of_slot_deletion(
+            assignment=entry.assignment,
+            slot=entry.time_slot,
+            room=entry.room,
+            actor=request.user
+        )
         delete_entry(entry, user=request.user)
         messages.success(
             request,
-            f"Removed '{subject}' for {division} at {slot} in {room}. "
-            "Re-run the solver if you want the hours redistributed.",
+            f"Removed '{subject}' for {division} at {slot} in {room}. Portal notifications delivered to faculty and class.",
         )
         return redirect(reverse("scheduler:manage_entries") + f"?semester_id={semester_id}")
 
@@ -872,7 +896,7 @@ def move_entry_view(request, pk):
     """Reschedule a single entry to a different period and/or room."""
     entry = get_object_or_404(
         TimetableEntry.objects.select_related(
-            "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+            "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
         ),
         pk=pk,
     )
@@ -885,15 +909,26 @@ def move_entry_view(request, pk):
         if new_slot is None or new_room is None:
             messages.error(request, "Please choose both a period and a room.")
         else:
+            old_slot_code = entry.time_slot.slot_code
             _, conflicts = move_entry(entry, new_slot, new_room, user=request.user)
             if conflicts:
                 for conflict in conflicts:
                     messages.error(request, conflict)
             else:
+                entry.refresh_from_db()
+                from .notifications import notify_respective_parties_of_slot_change
+                notify_respective_parties_of_slot_change(
+                    assignment=entry.assignment,
+                    old_slot_code=old_slot_code,
+                    new_slot=new_slot,
+                    room=new_room,
+                    actor=request.user,
+                    action_type="moved"
+                )
                 messages.success(
                     request,
                     f"'{entry.assignment.subject.name}' moved to "
-                    f"{new_slot.slot_code} in {new_room.name}.",
+                    f"{new_slot.slot_code} in {new_room.name}. Portal notifications delivered.",
                 )
                 return redirect(
                     reverse("scheduler:manage_entries") + f"?semester_id={entry.semester_id}"
@@ -937,12 +972,33 @@ def swap_entries_view(request):
         if not entry_a or not entry_b:
             messages.error(request, "Please choose two timetable entries to swap.")
         else:
+            old_slot_a = entry_a.time_slot.slot_code
+            old_slot_b = entry_b.time_slot.slot_code
             ok, conflicts = swap_entries(entry_a, entry_b, user=request.user)
             if ok:
+                entry_a.refresh_from_db()
+                entry_b.refresh_from_db()
+                from .notifications import notify_respective_parties_of_slot_change
+                notify_respective_parties_of_slot_change(
+                    assignment=entry_a.assignment,
+                    old_slot_code=old_slot_a,
+                    new_slot=entry_a.time_slot,
+                    room=entry_a.room,
+                    actor=request.user,
+                    action_type="swapped"
+                )
+                notify_respective_parties_of_slot_change(
+                    assignment=entry_b.assignment,
+                    old_slot_code=old_slot_b,
+                    new_slot=entry_b.time_slot,
+                    room=entry_b.room,
+                    actor=request.user,
+                    action_type="swapped"
+                )
                 messages.success(
                     request,
                     f"Swapped '{entry_a.assignment.subject.name}' with "
-                    f"'{entry_b.assignment.subject.name}'.",
+                    f"'{entry_b.assignment.subject.name}'. Portal notifications delivered.",
                 )
             else:
                 for conflict in conflicts:
@@ -1428,7 +1484,7 @@ def export_ical_view(request):
         selected_semester = Semester.objects.order_by("-start_date").first()
 
     entries_qs = TimetableEntry.objects.select_related(
-        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+        "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
     )
     if selected_semester:
         entries_qs = entries_qs.filter(semester=selected_semester)
@@ -1579,32 +1635,64 @@ def live_move_api(request):
 
     entry_id = request.POST.get("entry_id")
     target_slot_id = request.POST.get("target_slot_id")
+    target_day = request.POST.get("day")
+    target_period = request.POST.get("period")
     target_room_id = request.POST.get("target_room_id")
 
     entry = TimetableEntry.objects.filter(pk=entry_id).select_related(
-        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+        "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot", "semester"
     ).first()
     if not entry:
         return JsonResponse({"success": False, "error": "Entry not found."}, status=404)
 
-    target_slot = TimeSlot.objects.filter(pk=target_slot_id).first()
+    target_slot = None
+    if target_slot_id:
+        target_slot = TimeSlot.objects.filter(pk=target_slot_id).first()
+    elif target_day and target_period:
+        target_slot = TimeSlot.objects.filter(day=target_day, period_number=int(target_period)).first()
+
     if not target_slot:
         return JsonResponse({"success": False, "error": "Target time slot not found."}, status=404)
 
-    target_room = Room.objects.filter(pk=target_room_id).first() if target_room_id else entry.room
-    if not target_room:
-        return JsonResponse({"success": False, "error": "Target room not found."}, status=404)
+    target_room = Room.objects.filter(pk=target_room_id).first() if target_room_id else None
+    from .edits import _format_time
+    old_slot_code = entry.time_slot.slot_code
+    old_slot_time = f"{_format_time(entry.time_slot.start_time)}-{_format_time(entry.time_slot.end_time)}"
 
     _, conflicts = move_entry(entry, target_slot, target_room, user=request.user)
     if conflicts:
         return JsonResponse({"success": False, "conflicts": conflicts}, status=400)
 
+    # Refresh from db to get final state
+    entry.refresh_from_db()
+    teacher = entry.assignment.teacher
+
+    # Instantly deliver notifications to both respective faculty and class students on their portal
+    from .notifications import notify_respective_parties_of_slot_change
+    notify_respective_parties_of_slot_change(
+        assignment=entry.assignment,
+        old_slot_code=old_slot_code,
+        new_slot=target_slot,
+        room=entry.room,
+        actor=request.user,
+        action_type="moved"
+    )
+
     return JsonResponse({
         "success": True,
-        "message": f"Moved {entry.assignment.subject.name} to {target_slot.slot_code} in {target_room.name}.",
+        "message": f"Rescheduled {entry.assignment.subject.name} to {target_slot.slot_code} in {entry.room.name}. Notifications delivered to respective teacher & class portal.",
         "entry_id": entry.id,
+        "subject_name": entry.assignment.subject.name,
+        "is_lab": entry.assignment.subject.is_lab,
+        "division_name": entry.assignment.division.name,
+        "division_id": entry.assignment.division.id,
+        "teacher_id": teacher.id,
+        "teacher_name": teacher.name,
         "new_slot": target_slot.slot_code,
-        "new_room": target_room.name,
+        "new_slot_id": target_slot.id,
+        "new_room": entry.room.name,
+        "new_room_id": entry.room.id,
+        "old_slot": f"{old_slot_code} ({old_slot_time})",
     })
 
 
@@ -1622,23 +1710,67 @@ def live_swap_api(request):
     entry_b_id = request.POST.get("entry_b_id")
 
     entry_a = TimetableEntry.objects.filter(pk=entry_a_id).select_related(
-        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+        "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
     ).first()
     entry_b = TimetableEntry.objects.filter(pk=entry_b_id).select_related(
-        "assignment__subject", "assignment__teacher", "assignment__division", "room", "time_slot"
+        "assignment__subject", "assignment__teacher__user", "assignment__division", "room", "time_slot"
     ).first()
 
     if not entry_a or not entry_b:
         return JsonResponse({"success": False, "error": "Both entries must exist to swap."}, status=400)
 
+    old_slot_a = entry_a.time_slot.slot_code
+    old_slot_b = entry_b.time_slot.slot_code
+
     ok, conflicts = swap_entries(entry_a, entry_b, user=request.user)
     if not ok:
         return JsonResponse({"success": False, "conflicts": conflicts}, status=400)
 
+    entry_a.refresh_from_db()
+    entry_b.refresh_from_db()
+
+    # Instantly deliver notifications to both respective teachers and students on their portal
+    from .notifications import notify_respective_parties_of_slot_change
+    notify_respective_parties_of_slot_change(
+        assignment=entry_a.assignment,
+        old_slot_code=old_slot_a,
+        new_slot=entry_a.time_slot,
+        room=entry_a.room,
+        actor=request.user,
+        action_type="swapped"
+    )
+    notify_respective_parties_of_slot_change(
+        assignment=entry_b.assignment,
+        old_slot_code=old_slot_b,
+        new_slot=entry_b.time_slot,
+        room=entry_b.room,
+        actor=request.user,
+        action_type="swapped"
+    )
+
     return JsonResponse({
         "success": True,
-        "message": f"Successfully swapped '{entry_a.assignment.subject.name}' and '{entry_b.assignment.subject.name}'.",
+        "message": f"Successfully swapped '{entry_a.assignment.subject.name}' and '{entry_b.assignment.subject.name}'. Portal notifications delivered to respective faculty and classes.",
+        "entry_a": {
+            "id": entry_a.id,
+            "subject": entry_a.assignment.subject.name,
+            "teacher_id": entry_a.assignment.teacher.id,
+            "teacher_name": entry_a.assignment.teacher.name,
+            "new_slot": entry_a.time_slot.slot_code,
+            "old_slot": old_slot_a,
+            "room": entry_a.room.name,
+        },
+        "entry_b": {
+            "id": entry_b.id,
+            "subject": entry_b.assignment.subject.name,
+            "teacher_id": entry_b.assignment.teacher.id,
+            "teacher_name": entry_b.assignment.teacher.name,
+            "new_slot": entry_b.time_slot.slot_code,
+            "old_slot": old_slot_b,
+            "room": entry_b.room.name,
+        },
     })
+
 
 
 # ===========================================================================
@@ -1682,6 +1814,14 @@ def faculty_substitution_api(request):
         .values_list("teacher_id", flat=True)
     )
 
+    from django.db.models import Count
+    teacher_hours = dict(
+        TimetableEntry.objects.filter(semester=semester)
+        .values('assignment__teacher_id')
+        .annotate(c=Count('id'))
+        .values_list('assignment__teacher_id', 'c')
+    )
+
     candidates = []
     for teacher in Teacher.objects.all():
         if original_teacher and teacher.id == original_teacher.id:
@@ -1689,7 +1829,7 @@ def faculty_substitution_api(request):
         is_busy = teacher.id in busy_teachers
         is_unavailable = teacher.id in unavailable_teachers
 
-        current_hours = TimetableEntry.objects.filter(semester=semester, assignment__teacher=teacher).count()
+        current_hours = teacher_hours.get(teacher.id, 0)
         remaining_hours = max(0, teacher.max_hours_per_week - current_hours)
 
         status = "Available"

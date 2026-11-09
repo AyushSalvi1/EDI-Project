@@ -1,46 +1,50 @@
 {% extends "scheduler/base.html" %}
 
-{% block title %}Move Entry | Automatic Timetable Generator{% endblock %}
+{% block title %}Reschedule Entry | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
 
-  <div class="card p-4 sm:p-6">
-    <h1 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-      <i class="fa-solid fa-arrows-turn-to-dots text-indigo-600"></i> Reschedule Entry
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <div class="flex items-center gap-2 mb-1.5">
+      <span class="status-pill-indigo !text-[10px]">
+        <span class="status-dot-cyan"></span> Manual Period &amp; Venue Reassignment
+      </span>
+    </div>
+    <h1 class="text-xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+      <i class="fa-solid fa-arrows-turn-to-dots text-cyan-400"></i> Reschedule Timetable Entry
     </h1>
-    <p class="text-xs text-slate-500 mt-1">
-      Change the period and/or room. The move is rejected if it would create a teacher clash, a division clash,
-      a room clash, a room-type mismatch, a capacity shortfall, or land on an unavailable period.
+    <p class="text-xs text-slate-400 mt-1">
+      Change the period or room. The move is strictly rejected if it causes a teacher clash, division conflict, venue clash, room-type mismatch, or capacity shortfall.
     </p>
   </div>
 
   <!-- Current state -->
-  <div class="card p-4 sm:p-5">
-    <p class="text-[11px] font-semibold text-slate-600 uppercase mb-2">Current Placement</p>
-    <div class="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200">
-      <div class="text-center px-3 py-2 rounded-lg bg-slate-900 text-white shrink-0">
-        <p class="text-[10px] uppercase text-slate-400 font-semibold">Period</p>
+  <div class="card p-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+    <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2.5">Current Scheduled Position</p>
+    <div class="flex flex-wrap items-center gap-3.5 p-4 rounded-xl bg-[#0F172A] border border-slate-800">
+      <div class="text-center px-3.5 py-2 rounded-xl bg-slate-800 text-[#F8FAFC] shrink-0 border border-slate-700">
+        <p class="text-[9px] uppercase text-cyan-400 font-extrabold tracking-wider">Slot</p>
         <p class="text-sm font-bold font-mono">{{ entry.time_slot.slot_code }}</p>
       </div>
-      <div class="text-[11px] text-slate-600">
-        <p class="font-bold text-slate-900">{{ entry.assignment.subject.name }}
-          {% if entry.assignment.subject.is_lab %}<span class="text-purple-600"> (Lab)</span>{% endif %}
+      <div class="text-xs text-slate-300">
+        <p class="font-bold text-[#F8FAFC] text-sm">{{ entry.assignment.subject.name }}
+          {% if entry.assignment.subject.is_lab %}<span class="status-pill-cyan !text-[8px] !py-0.2 !px-1.5 ml-1">LAB</span>{% endif %}
         </p>
-        <p>{{ entry.assignment.division.name }} &bull; {{ entry.assignment.teacher.name }}</p>
-        <p class="font-mono text-slate-500">{{ entry.time_slot.start_time|time:"H:i" }}&ndash;{{ entry.time_slot.end_time|time:"H:i" }} in {{ entry.room.name }}</p>
+        <p class="mt-0.5 text-slate-400">{{ entry.assignment.division.name }} &bull; {{ entry.assignment.teacher.name }}</p>
+        <p class="font-mono text-cyan-400/90 text-[11px] mt-0.5">{{ entry.time_slot.start_time|time:"H:i" }}&ndash;{{ entry.time_slot.end_time|time:"H:i" }} in {{ entry.room.name }}</p>
       </div>
     </div>
   </div>
 
   <!-- Move form -->
-  <form method="POST" class="card p-4 sm:p-6 space-y-4">
+  <form method="POST" class="card p-5 sm:p-6 space-y-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     {% csrf_token %}
 
     <div class="grid sm:grid-cols-2 gap-4">
       <div>
-        <label for="time_slot_id" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Target Period</label>
-        <select name="time_slot_id" id="time_slot_id" required class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        <label for="time_slot_id" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Period</label>
+        <select name="time_slot_id" id="time_slot_id" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
           {% for slot in slots %}
           <option value="{{ slot.id }}" {% if selected_slot_id == slot.id %}selected{% endif %}>
             {{ slot.slot_code }} &mdash; {{ slot.start_time|time:"H:i" }} to {{ slot.end_time|time:"H:i" }}
@@ -50,8 +54,8 @@
       </div>
 
       <div>
-        <label for="room_id" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Target Room</label>
-        <select name="room_id" id="room_id" required class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+        <label for="room_id" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Venue / Classroom</label>
+        <select name="room_id" id="room_id" required class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
           {% for room in rooms %}
           <option value="{{ room.id }}" {% if selected_room_id == room.id %}selected{% endif %}>
             {{ room.name }} (Cap: {{ room.capacity }})
@@ -60,17 +64,17 @@
           <option disabled selected>No room satisfies this subject's type and the division's strength</option>
           {% endfor %}
         </select>
-        <p class="text-[10px] text-slate-400 mt-1">
-          Only rooms matching the subject type with enough capacity are listed.
+        <p class="text-[10px] text-slate-500 mt-1">
+          Only rooms matching the subject type with adequate capacity are shown.
         </p>
       </div>
     </div>
 
-    <div class="flex flex-wrap gap-2 pt-2">
-      <button type="submit" class="btn-primary">
-        <i class="fa-solid fa-check"></i> Apply Move
+    <div class="flex flex-wrap gap-2.5 pt-2">
+      <button type="submit" class="btn-primary !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-indigo-sm font-bold">
+        <i class="fa-solid fa-check"></i> Apply Reschedule
       </button>
-      <a href="{% url 'scheduler:manage_entries' %}?semester_id={{ entry.semester_id }}" class="btn-ghost">
+      <a href="{% url 'scheduler:manage_entries' %}?semester_id={{ entry.semester_id }}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">
         <i class="fa-solid fa-xmark"></i> Cancel
       </a>
     </div>

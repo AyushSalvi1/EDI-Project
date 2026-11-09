@@ -5,23 +5,28 @@
 {% block content %}
 <div class="max-w-4xl mx-auto space-y-6">
 
-  <div class="card p-4 sm:p-6">
-    <h1 class="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-      <i class="fa-solid fa-right-left text-indigo-600"></i> Swap Two Entries
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <div class="flex items-center gap-2 mb-1.5">
+      <span class="status-pill-indigo !text-[10px]">
+        <span class="status-dot-cyan"></span> Atomic Slot Exchange
+      </span>
+    </div>
+    <h1 class="text-xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+      <i class="fa-solid fa-right-left text-cyan-400"></i> Swap Two Timetable Entries
     </h1>
-    <p class="text-xs text-slate-500 mt-1">
+    <p class="text-xs text-slate-400 mt-1">
       If both classes sit in the same period their rooms are exchanged; otherwise their periods are exchanged.
-      The swap is rejected if either new position would break a scheduling rule.
+      The swap is strictly rejected if either new position violates teacher, division, room, or capacity constraints.
     </p>
   </div>
 
-  <form method="POST" class="card p-4 sm:p-6 space-y-4">
+  <form method="POST" class="card p-5 sm:p-6 space-y-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     {% csrf_token %}
 
     <div>
-      <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Semester</label>
+      <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Target Semester</label>
       <select name="semester_id_select" onchange="window.location='{% url 'scheduler:swap_entries' %}?semester_id='+this.value"
-              class="rounded-xl border border-slate-300 px-3 py-1.5 text-xs bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              class="rounded-xl border border-slate-700 px-3.5 py-2 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         {% for s in semesters %}
         <option value="{{ s.id }}" {% if selected_semester and selected_semester.id == s.id %}selected{% endif %}>{{ s.name }}</option>
         {% endfor %}
@@ -30,10 +35,10 @@
 
     <div class="grid sm:grid-cols-2 gap-4">
       <div>
-        <label for="entry_a" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">First Entry (A)</label>
+        <label for="entry_a" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Primary Entry (A)</label>
         <select name="entry_a" id="entry_a" required
-                class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-          <option value="">-- Select a class --</option>
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">-- Select a scheduled class --</option>
           {% for entry in choices %}
           <option value="{{ entry.id }}">
             {{ entry.time_slot.slot_code }} | {{ entry.assignment.division.name }} | {{ entry.assignment.subject.name }} | {{ entry.room.name }}
@@ -43,10 +48,10 @@
       </div>
 
       <div>
-        <label for="entry_b" class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Second Entry (B)</label>
+        <label for="entry_b" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Secondary Entry (B)</label>
         <select name="entry_b" id="entry_b" required
-                class="w-full px-3 py-2.5 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-          <option value="">-- Select a class --</option>
+                class="w-full px-3.5 py-2.5 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
+          <option value="">-- Select a scheduled class --</option>
           {% for entry in choices %}
           <option value="{{ entry.id }}">
             {{ entry.time_slot.slot_code }} | {{ entry.assignment.division.name }} | {{ entry.assignment.subject.name }} | {{ entry.room.name }}
@@ -56,11 +61,11 @@
       </div>
     </div>
 
-    <div class="flex flex-wrap gap-2 pt-2">
-      <button type="submit" class="btn-primary">
-        <i class="fa-solid fa-right-left"></i> Swap Entries
+    <div class="flex flex-wrap gap-2.5 pt-2">
+      <button type="submit" class="btn-primary !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-indigo-sm font-bold">
+        <i class="fa-solid fa-right-left"></i> Execute Constraint-Checked Swap
       </button>
-      <a href="{% url 'scheduler:manage_entries' %}{% if selected_semester %}?semester_id={{ selected_semester.id }}{% endif %}" class="btn-ghost">
+      <a href="{% url 'scheduler:manage_entries' %}{% if selected_semester %}?semester_id={{ selected_semester.id }}{% endif %}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">
         <i class="fa-solid fa-xmark"></i> Cancel
       </a>
     </div>

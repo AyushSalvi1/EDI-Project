@@ -3,28 +3,32 @@
 {% block title %}Suggested Fixes | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
-<div class="space-y-5">
+<div class="space-y-6">
 
-  <div class="card p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+  <div class="card p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     <div>
-      <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-        <i class="fa-solid fa-lightbulb text-indigo-600"></i> Suggested Fixes
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="status-pill-indigo !text-[10px]">
+          <span class="status-dot-cyan"></span> Automated Remediation Proposals
+        </span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+        <i class="fa-solid fa-lightbulb text-cyan-400"></i> Suggested Schedule Fixes
       </h1>
-      <p class="text-xs sm:text-sm text-slate-500 mt-1">
-        Each suggestion was trialled against the real solver before being shown.
-        Approving one applies it and notifies everyone affected.
+      <p class="text-xs sm:text-sm text-slate-400 mt-1">
+        Each remedy is verified in a solver sandbox before presentation. Approving a proposal automatically executes it and notifies affected faculty and students.
       </p>
     </div>
-    <form method="GET" class="flex flex-wrap items-center gap-2">
+    <form method="GET" class="flex flex-wrap items-center gap-2.5">
       <select name="semester_id" onchange="this.form.submit()"
-              class="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              class="rounded-xl border border-slate-700 px-3.5 py-2 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         {% for s in semesters %}
         <option value="{{ s.id }}" {% if selected_semester and s.id == selected_semester.id %}selected{% endif %}>{{ s.name }}</option>
         {% endfor %}
       </select>
       <select name="status" onchange="this.form.submit()"
-              class="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-        <option value="ALL" {% if status == 'ALL' %}selected{% endif %}>All</option>
+              class="rounded-xl border border-slate-700 px-3.5 py-2 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
+        <option value="ALL" {% if status == 'ALL' %}selected{% endif %}>All Proposals</option>
         {% for value, label in statuses %}
         <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
         {% endfor %}
@@ -33,64 +37,63 @@
   </div>
 
   {% if not proposals %}
-    <div class="card p-8 text-center">
-      <div class="w-14 h-14 rounded-2xl bg-indigo-100 grid place-items-center mx-auto">
-        <i class="fa-solid fa-lightbulb text-indigo-500 text-2xl"></i>
+    <div class="card p-12 text-center bg-[#1E293B]/80 border border-slate-800 rounded-xl shadow-xl">
+      <div class="w-14 h-14 rounded-xl bg-slate-800 text-cyan-400 border border-slate-700 grid place-items-center mx-auto text-2xl mb-4">
+        <i class="fa-solid fa-lightbulb"></i>
       </div>
-      <h2 class="text-base font-extrabold text-slate-900 mt-4">No {{ status|lower }} suggestions</h2>
-      <p class="text-xs text-slate-500 mt-1">
-        Open the Issue Centre and choose <strong>Suggest Fixes</strong> to have the
-        engine analyse the timetable.
+      <h2 class="text-base font-extrabold text-[#F8FAFC]">No {{ status|lower }} proposals found</h2>
+      <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+        Open the Issue Centre and trigger <strong>Synthesize Fixes</strong> to have the engine simulate timetable adjustments.
       </p>
-      <a href="{% url 'scheduler:issue_centre' %}" class="btn-primary mt-5">
-        <i class="fa-solid fa-triangle-exclamation"></i> Go to Issue Centre
+      <a href="{% url 'scheduler:issue_centre' %}" class="btn-primary mt-5 !rounded-xl">
+        <i class="fa-solid fa-triangle-exclamation"></i> Open Issue Centre
       </a>
     </div>
   {% else %}
-    <div class="space-y-3">
+    <div class="space-y-3.5">
       {% for proposal in proposals %}
-      <div class="card p-4 sm:p-5 {% if proposal.is_actionable %}border-l-4 border-l-indigo-500{% else %}opacity-80{% endif %}">
+      <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl transition-all hover:border-slate-700 {% if proposal.is_actionable %}border-l-4 border-l-indigo-500{% else %}opacity-80{% endif %}">
         <div class="flex flex-col lg:flex-row lg:items-start justify-between gap-4">
 
           <div class="min-w-0 flex-1">
             <div class="flex flex-wrap items-center gap-2">
-              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold
-                {% if proposal.status == 'PENDING' %}bg-amber-100 text-amber-700
-                {% elif proposal.status == 'APPLIED' %}bg-emerald-100 text-emerald-700
-                {% elif proposal.status == 'REJECTED' %}bg-slate-200 text-slate-600
-                {% else %}bg-rose-100 text-rose-700{% endif %}">
+              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold border
+                {% if proposal.status == 'PENDING' %}bg-amber-950/80 text-amber-300 border-amber-800
+                {% elif proposal.status == 'APPLIED' %}bg-cyan-950/80 text-cyan-300 border-cyan-800
+                {% elif proposal.status == 'REJECTED' %}bg-slate-800 text-slate-400 border-slate-700
+                {% else %}bg-rose-950/80 text-rose-300 border-rose-800{% endif %}">
                 {{ proposal.get_status_display }}
               </span>
-              <h3 class="text-sm font-extrabold text-slate-900">{{ proposal.title }}</h3>
+              <h3 class="text-sm font-extrabold text-[#F8FAFC]">{{ proposal.title }}</h3>
               {% if proposal.verified_gain_hours %}
-              <span class="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-emerald-100 text-emerald-700">
+              <span class="status-pill-cyan !text-[9px] !py-0.2 !px-1.5">
                 <i class="fa-solid fa-flask"></i> Verified: +{{ proposal.verified_gain_hours }}h/week
               </span>
               {% endif %}
             </div>
 
-            <p class="text-xs text-slate-600 leading-relaxed mt-2">{{ proposal.rationale }}</p>
+            <p class="text-xs text-slate-300 leading-relaxed mt-2.5">{{ proposal.rationale }}</p>
 
-            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] text-slate-400">
-              <span><i class="fa-solid fa-code"></i> {{ proposal.get_kind_display }}</span>
+            <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-3 text-[10px] text-slate-400 font-mono">
+              <span><i class="fa-solid fa-code text-cyan-400"></i> {{ proposal.get_kind_display }}</span>
               {% if proposal.issue %}
               <span>
-                <i class="fa-solid fa-book"></i>
+                <i class="fa-solid fa-book text-indigo-400"></i>
                 {{ proposal.issue.assignment.subject.name }} &bull;
                 {{ proposal.issue.assignment.division.name }}
               </span>
               {% endif %}
-              <span><i class="fa-solid fa-user-group"></i> Affects: {{ proposal.affected_people }}</span>
-              <span><i class="fa-regular fa-clock"></i> {{ proposal.created_at|date:"j M Y, H:i" }}</span>
+              <span><i class="fa-solid fa-user-group text-slate-400"></i> Affects: {{ proposal.affected_people }}</span>
+              <span><i class="fa-regular fa-clock text-slate-400"></i> {{ proposal.created_at|date:"j M Y, H:i" }}</span>
             </div>
 
             {% if proposal.result_note %}
-            <p class="text-[11px] text-slate-600 mt-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-              <strong class="text-slate-700">Outcome:</strong> {{ proposal.result_note }}
+            <p class="text-[11px] text-cyan-300 mt-2.5 p-3 rounded-xl bg-[#0F172A] border border-slate-800 font-mono">
+              <strong class="text-[#F8FAFC]">Outcome:</strong> {{ proposal.result_note }}
             </p>
             {% endif %}
             {% if proposal.reviewed_by %}
-            <p class="text-[10px] text-slate-400 mt-1.5">
+            <p class="text-[10px] text-slate-500 mt-1.5 font-mono">
               Reviewed by {{ proposal.reviewed_by.username }} on {{ proposal.reviewed_at|date:"j M Y, H:i" }}
             </p>
             {% endif %}
@@ -99,19 +102,19 @@
           {% if proposal.is_actionable %}
           <div class="flex gap-2 shrink-0">
             <form method="POST" action="{% url 'scheduler:approve_proposal' proposal.pk %}" class="js-confirm"
-                  data-confirm="Apply this fix? It will change the timetable and notify every affected student and teacher.">
+                  data-confirm="Apply this fix? It will change the timetable and notify affected parties.">
               {% csrf_token %}
-              <input type="hidden" name="semester_id" value="{{ proposal.semester_id }}">
-              <button class="btn-secondary !text-xs !py-2" data-loading="Applying&hellip;">
+              <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+              <button class="btn-cyan !text-[11px] !py-2 !px-3.5 !rounded-xl shadow-glow-cyan-sm font-bold" data-loading="Applying&hellip;">
                 <i class="fa-solid fa-circle-check"></i> Approve &amp; Apply
               </button>
             </form>
             <form method="POST" action="{% url 'scheduler:reject_proposal' proposal.pk %}" class="js-confirm"
                   data-confirm="Decline this suggestion? The timetable will not change.">
               {% csrf_token %}
-              <input type="hidden" name="semester_id" value="{{ proposal.semester_id }}">
-              <button class="btn-ghost !text-xs !py-2">
-                <i class="fa-solid fa-xmark"></i> Decline
+              <input type="hidden" name="semester_id" value="{{ selected_semester.id }}">
+              <button class="btn-ghost !text-[11px] !py-2 !px-3.5 !rounded-xl">
+                <i class="fa-solid fa-xmark"></i> Dismiss
               </button>
             </form>
           </div>

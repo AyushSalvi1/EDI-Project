@@ -364,6 +364,17 @@ class Teacher(models.Model):
     def __str__(self):
         return f"{self.name} (Max: {self.max_hours_per_week}h/wk)"
 
+    @property
+    def default_email(self) -> str:
+        if self.user and self.user.email:
+            return self.user.email
+        import re
+        clean = re.sub(r'^(Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.)\s*', '', self.name, flags=re.IGNORECASE).strip()
+        slug = re.sub(r'[^a-zA-Z0-9]+', '.', clean.lower()).strip('.')
+        if not slug:
+            slug = f"faculty_{self.id}"
+        return f"{slug}@vit.edu"
+
 
 # ===========================================================================
 # 7. TeacherUnavailability

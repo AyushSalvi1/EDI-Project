@@ -1,85 +1,155 @@
 {% comment %}
-Shared Day x Period timetable grid with interactive details, live substitute teacher finder, and Drag-and-Drop / Instant Swap capabilities.
-Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
+Shared Day x Period timetable grid with interactive drag-and-drop scheduling,
+real-time backend conflict validation (teacher, room, lab, student availability),
+and instant in-app portal notifications delivered directly to faculty and students.
+Hyper-modern Obsidian (#0F172A) & Dark Slate (#1E293B) design with 12px rounded components.
 {% endcomment %}
-<div class="card overflow-hidden border border-slate-200/90 dark:border-slate-800 shadow-md">
+
+<!-- CSRF Token for Ajax requests -->
+{% csrf_token %}
+
+<div class="card overflow-hidden border border-slate-800/90 bg-[#0F172A]/90 backdrop-blur-xl shadow-2xl rounded-xl relative">
+  <!-- Interactive Drag-and-Drop Guidance Banner for Admins -->
+  {% if user.is_superuser or user.is_staff %}
+  <div class="no-print bg-[#1E293B]/90 px-4 py-3 border-b border-slate-800/80 flex items-center justify-between gap-3 text-xs">
+    <div class="flex items-center gap-3 text-slate-200 font-medium">
+      <span class="w-7 h-7 rounded-xl bg-indigo-600/30 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xs shadow-glow-indigo-sm shrink-0">
+        <i class="fa-solid fa-hand-pointer"></i>
+      </span>
+      <span class="text-xs text-slate-300">
+        <strong class="text-[#F8FAFC]">Interactive Drag & Drop Scheduler:</strong> Drag any period to reschedule or swap classes. Backend instantly verifies faculty, venue, division, and lab capacity with zero latency.
+      </span>
+    </div>
+    <span class="status-pill-cyan shrink-0 hidden sm:inline-flex">
+      <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
+      Live Constraint Engine
+    </span>
+  </div>
+  {% endif %}
+
   <div class="overflow-x-auto">
-    <table class="w-full text-left border-collapse min-w-[760px]">
+    <table class="w-full text-left border-collapse min-w-[760px] select-none" id="timetable-matrix">
       <thead>
-        <tr class="bg-slate-900 dark:bg-slate-950 text-white text-xs font-bold uppercase tracking-wider">
-          <th class="p-4 border-r border-slate-800 text-center w-32 bg-slate-950 text-slate-300">
-            <span class="flex items-center justify-center gap-1.5">
-              <i class="fa-solid fa-clock text-indigo-400"></i> Period
+        <tr class="bg-[#0B1120] text-slate-300 text-xs font-bold uppercase tracking-wider border-b border-slate-800">
+          <th class="p-3.5 border-r border-slate-800 text-center w-36 bg-[#0B1120] text-slate-400">
+            <span class="flex items-center justify-center gap-1.5 font-mono text-[11px] tracking-wider text-cyan-400">
+              <i class="fa-solid fa-clock"></i> Period
             </span>
           </th>
           {% for header in day_headers %}
-          <th class="p-4 border-r border-slate-800 last:border-0 text-center text-slate-200">
+          <th class="p-3.5 border-r border-slate-800 last:border-0 text-center text-[#F8FAFC] font-extrabold tracking-wider text-xs">
             {{ header }}
           </th>
           {% endfor %}
         </tr>
       </thead>
-      <tbody class="divide-y divide-slate-200 dark:divide-slate-800 text-xs">
+      <tbody class="divide-y divide-slate-800 text-xs bg-[#0F172A]/50">
         {% for row in grid_rows %}
-        <tr class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors duration-150">
-          <td class="p-3.5 border-r border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50 font-semibold text-center whitespace-nowrap">
-            <div class="text-slate-900 dark:text-slate-100 font-extrabold text-sm">Period {{ row.period_number }}</div>
-            <div class="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 tracking-tight">{{ row.time_range }}</div>
+        <tr class="hover:bg-slate-800/30 transition-colors duration-150">
+          <!-- Period Number & Time Range -->
+          <td class="p-3.5 border-r border-slate-800 bg-[#0B1120]/80 font-semibold text-center whitespace-nowrap">
+            <div class="text-[#F8FAFC] font-extrabold text-sm tracking-tight">Period {{ row.period_number }}</div>
+            <div class="text-[11px] text-cyan-400/90 font-mono mt-0.5 tracking-tight flex items-center justify-center gap-1">
+              <i class="fa-regular fa-clock text-[9px] text-slate-500"></i> {{ row.time_range }}
+            </div>
           </td>
 
+          <!-- Day Cells -->
           {% for cell in row.cells %}
-          <td class="p-2 border-r border-slate-200 dark:border-slate-800 last:border-0 align-top h-28 w-1/6"
-              data-day="{{ cell.day }}" data-period="{{ row.period_number }}">
+          <td class="timetable-cell p-2 border-r border-slate-800/90 last:border-0 align-top h-32 w-1/6 transition-all duration-150"
+              data-day="{{ cell.day }}"
+              data-period="{{ row.period_number }}"
+              data-time="{{ row.time_range }}"
+              {% if user.is_superuser or user.is_staff %}
+              ondragover="handleCellDragOver(event, this)"
+              ondragleave="handleCellDragLeave(event, this)"
+              ondrop="handleCellDrop(event, this, '{{ cell.day }}', '{{ row.period_number }}', {% if cell.entry %}'{{ cell.entry.id }}'{% else %}null{% endif %})"
+              {% endif %}>
+            
             {% if cell.entry %}
-            <div class="slot-card h-full rounded-2xl p-3 flex flex-col justify-between border shadow-sm backdrop-blur-sm select-none
+            <!-- Scheduled Class Card -->
+            <div id="entry-card-{{ cell.entry.id }}"
+              class="slot-card group relative h-full rounded-xl p-3 flex flex-col justify-between border shadow-md select-none transition-all duration-200 bg-[#1E293B]/95
+              {% if user.is_superuser or user.is_staff %}cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-xl{% else %}cursor-pointer{% endif %}
               {% if cell.entry.assignment.subject.is_lab %}
-                bg-gradient-to-br from-purple-50/95 to-indigo-50/70 dark:from-purple-950/40 dark:to-indigo-950/20 border-purple-200/90 dark:border-purple-800/60 text-purple-950 dark:text-purple-200 hover:border-purple-300
+                border-cyan-500/30 hover:border-cyan-400 text-slate-100 hover:shadow-glow-cyan-sm
               {% else %}
-                bg-gradient-to-br from-indigo-50/95 to-blue-50/70 dark:from-indigo-950/40 dark:to-blue-950/20 border-indigo-200/90 dark:border-indigo-800/60 text-indigo-950 dark:text-indigo-200 hover:border-indigo-300
+                border-indigo-500/30 hover:border-indigo-400 text-slate-100 hover:shadow-glow-indigo-sm
               {% endif %}"
-              onclick="showSlotModal('{{ cell.entry.id }}', '{{ cell.entry.assignment.subject.name|escapejs }}', '{{ cell.entry.assignment.subject.code|default:''|escapejs }}', '{{ cell.entry.assignment.teacher.name|escapejs }}', '{{ cell.entry.assignment.division.name|escapejs }}', '{{ cell.entry.room.name|escapejs }}', '{{ cell.entry.room.capacity }}', '{{ cell.entry.time_slot.slot_code|escapejs }}', '{{ row.time_range|escapejs }}', {{ cell.entry.assignment.subject.is_lab|yesno:'true,false' }})"
-              title="Click to view details or find substitute faculty">
+              {% if user.is_superuser or user.is_staff %}
+              draggable="true"
+              ondragstart="handleCardDragStart(event, this)"
+              ondragend="handleCardDragEnd(event, this)"
+              {% endif %}
+              data-entry-id="{{ cell.entry.id }}"
+              data-subject="{{ cell.entry.assignment.subject.name }}"
+              data-code="{{ cell.entry.assignment.subject.code|default:'' }}"
+              data-is-lab="{{ cell.entry.assignment.subject.is_lab|yesno:'true,false' }}"
+              data-teacher-id="{{ cell.entry.assignment.teacher.id }}"
+              data-teacher-name="{{ cell.entry.assignment.teacher.name }}"
+              data-teacher-email="{{ cell.entry.assignment.teacher.default_email }}"
+              data-division-id="{{ cell.entry.assignment.division.id }}"
+              data-division-name="{{ cell.entry.assignment.division.name }}"
+              data-division-year="{{ cell.entry.assignment.division.year }}"
+              data-room-id="{{ cell.entry.room.id }}"
+              data-room-name="{{ cell.entry.room.name }}"
+              data-room-capacity="{{ cell.entry.room.capacity }}"
+              data-slot-code="{{ cell.entry.time_slot.slot_code }}"
+              data-day="{{ cell.day }}"
+              data-period="{{ row.period_number }}"
+              data-time-range="{{ row.time_range }}"
+              onclick="showSlotModal('{{ cell.entry.id }}', '{{ cell.entry.assignment.subject.name|escapejs }}', '{{ cell.entry.assignment.subject.code|default:''|escapejs }}', '{{ cell.entry.assignment.teacher.name|escapejs }}', '{{ cell.entry.assignment.teacher.id }}', '{{ cell.entry.assignment.teacher.default_email|escapejs }}', '{{ cell.entry.assignment.division.name|escapejs }}', '{{ cell.entry.room.name|escapejs }}', '{{ cell.entry.room.capacity }}', '{{ cell.entry.time_slot.slot_code|escapejs }}', '{{ row.time_range|escapejs }}', {{ cell.entry.assignment.subject.is_lab|yesno:'true,false' }})"
+              title="Click for details or drag to reschedule">
 
               <div>
                 <div class="flex items-center justify-between gap-1.5 mb-1.5">
-                  <span class="font-extrabold text-xs leading-snug line-clamp-2 tracking-tight group-hover:text-indigo-600">
-                    {{ cell.entry.assignment.subject.name }}
-                  </span>
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    {% if user.is_superuser or user.is_staff %}
+                    <i class="fa-solid fa-grip-vertical text-slate-500 group-hover:text-cyan-400 text-[10px] shrink-0" title="Drag to reschedule"></i>
+                    {% endif %}
+                    <span class="font-extrabold text-xs text-[#F8FAFC] leading-snug line-clamp-2 tracking-tight group-hover:text-cyan-300 transition-colors">
+                      {{ cell.entry.assignment.subject.name }}
+                    </span>
+                  </div>
                   {% if cell.entry.assignment.subject.is_lab %}
-                  <span class="px-1.5 py-0.5 rounded-md text-[8px] font-extrabold uppercase tracking-wider bg-purple-200/80 dark:bg-purple-900/70 text-purple-800 dark:text-purple-200 shrink-0 border border-purple-300/60 dark:border-purple-700/60 shadow-xs">
+                  <span class="status-pill-cyan !text-[8px] !py-0.5 !px-1.5 shrink-0 shadow-xs">
                     LAB
                   </span>
                   {% endif %}
                 </div>
 
                 {% if show_division %}
-                <div class="text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-1.5 mb-0.5">
-                  <i class="fa-solid fa-users text-[10px] text-slate-400"></i>
+                <div class="text-[11px] text-slate-300 flex items-center gap-1.5 mb-0.5">
+                  <i class="fa-solid fa-users text-[10px] text-slate-500"></i>
                   <span class="truncate font-semibold">{{ cell.entry.assignment.division.name }}</span>
                 </div>
                 {% endif %}
 
                 {% if show_teacher %}
-                <div class="text-[11px] text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                  <i class="fa-solid fa-user-tie text-[10px] text-slate-400"></i>
+                <div class="text-[11px] text-slate-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-user-tie text-[10px] text-slate-500"></i>
                   <span class="truncate font-medium">{{ cell.entry.assignment.teacher.name }}</span>
                 </div>
                 {% endif %}
               </div>
 
-              <div class="mt-2.5 pt-1.5 border-t {% if cell.entry.assignment.subject.is_lab %}border-purple-200/60 dark:border-purple-800/60 text-purple-800 dark:text-purple-300{% else %}border-indigo-200/60 dark:border-indigo-800/60 text-indigo-800 dark:text-indigo-300{% endif %} text-[10px] font-mono flex items-center justify-between">
-                <span class="flex items-center gap-1 truncate font-bold">
-                  <i class="fa-solid fa-door-open text-[9px] opacity-70"></i> {{ cell.entry.room.name }}
+              <!-- Footer with Room Info -->
+              <div class="mt-2.5 pt-1.5 border-t border-slate-700/60 text-[10px] font-mono flex items-center justify-between text-slate-400">
+                <span class="flex items-center gap-1 truncate font-bold text-slate-200">
+                  <i class="fa-solid fa-door-open text-[9px] text-cyan-400"></i> {{ cell.entry.room.name }}
                 </span>
-                <span class="text-[9px] px-1.5 py-0.2 rounded bg-white/60 dark:bg-slate-900/60 border border-slate-200/50 dark:border-slate-800 font-sans text-slate-500 dark:text-slate-400">
+                <span class="text-[9px] px-1.5 py-0.5 rounded-lg bg-[#0F172A] border border-slate-700 text-slate-400">
                   Cap {{ cell.entry.room.capacity }}
                 </span>
               </div>
 
             </div>
             {% else %}
-            <div class="h-full rounded-2xl border border-dashed border-slate-200 dark:border-slate-800/80 bg-slate-50/30 dark:bg-slate-900/20 flex flex-col items-center justify-center text-slate-400 dark:text-slate-600 text-[11px] hover:border-slate-300 dark:hover:border-slate-700 transition">
-              <span class="font-medium text-[10px] uppercase tracking-wider opacity-60">Available</span>
+            <!-- Available Empty Slot -->
+            <div class="empty-slot h-full rounded-xl border border-dashed border-slate-800 bg-[#0F172A]/40 flex flex-col items-center justify-center text-slate-500 text-[11px] hover:border-cyan-500/50 hover:bg-cyan-950/20 hover:text-cyan-400 transition-all duration-200">
+              <span class="font-bold text-[10px] uppercase tracking-wider opacity-70 flex items-center gap-1">
+                {% if user.is_superuser or user.is_staff %}<i class="fa-solid fa-plus text-[8px]"></i> Drop here{% else %}Available{% endif %}
+              </span>
             </div>
             {% endif %}
           </td>
@@ -87,8 +157,8 @@ Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
         </tr>
         {% empty %}
         <tr>
-          <td colspan="7" class="p-12 text-center text-sm text-slate-500 dark:text-slate-400">
-            <i class="fa-solid fa-calendar-xmark text-3xl mb-3 opacity-40"></i>
+          <td colspan="7" class="p-12 text-center text-sm text-slate-400">
+            <i class="fa-solid fa-calendar-xmark text-3xl mb-3 text-slate-600"></i>
             <p>No time slots or timetable entries configured.</p>
           </td>
         </tr>
@@ -98,73 +168,339 @@ Expects: day_headers, grid_rows, and optionally show_division / show_teacher.
   </div>
 </div>
 
-<!-- Interactive Class Detail & Faculty Substitute Modal -->
-<dialog id="slot-detail-modal" class="rounded-3xl border-0 p-0 shadow-2xl max-w-lg w-[calc(100%-2rem)] bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 backdrop-blur-2xl">
+<!-- ===========================================================================
+     MODAL 1: Conflict Alert Modal (Detailed Forensic Constraint Feedback)
+     =========================================================================== -->
+<dialog id="conflict-alert-modal" class="rounded-xl border border-rose-500/40 p-0 shadow-2xl max-w-xl w-[calc(100%-2rem)] bg-[#1E293B] text-[#F8FAFC] backdrop-blur-2xl">
+  <div class="p-6 sm:p-7">
+    <div class="flex items-start gap-4">
+      <div class="w-12 h-12 rounded-xl bg-rose-950/60 text-rose-400 flex items-center justify-center text-xl shrink-0 shadow-inner border border-rose-800/80">
+        <i class="fa-solid fa-triangle-exclamation animate-bounce"></i>
+      </div>
+      <div class="flex-1 min-w-0">
+        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-rose-950/80 text-rose-300 border border-rose-800">
+          Scheduling Constraint Violation
+        </span>
+        <h3 class="text-xl font-extrabold text-[#F8FAFC] mt-1 tracking-tight">
+          Cannot Reschedule Period
+        </h3>
+        <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+          The backend timetable engine evaluated this change and rejected it. The requested time slot is not available due to the following specific allocation(s):
+        </p>
+      </div>
+      <button type="button" onclick="document.getElementById('conflict-alert-modal').close()" 
+              class="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Conflict Details List -->
+    <div id="conflict-details-container" class="mt-5 space-y-2.5 max-h-64 overflow-y-auto pr-1">
+      <!-- Populated via JavaScript -->
+    </div>
+
+    <!-- Guidance Note -->
+    <div class="mt-4 p-3 rounded-xl bg-amber-950/30 border border-amber-900/60 flex items-center gap-2.5 text-xs text-amber-200">
+      <i class="fa-solid fa-lightbulb text-amber-400 shrink-0 text-sm"></i>
+      <span>Tip: Choose an unoccupied period or swap with a non-conflicting subject to keep the schedule conflict-free.</span>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="mt-6 flex justify-end gap-2.5">
+      <button type="button" onclick="document.getElementById('conflict-alert-modal').close()" 
+              class="btn-primary !text-xs !py-2.5 !px-5 shadow-rose-600/20 bg-gradient-to-r from-rose-600 to-rose-700 hover:from-rose-500 hover:to-rose-600 !rounded-xl">
+        <i class="fa-solid fa-check"></i> Understood, Keep Original Slot
+      </button>
+    </div>
+  </div>
+</dialog>
+
+<!-- ===========================================================================
+     MODAL 2: Interactive Class Detail & Faculty Substitute Modal
+     =========================================================================== -->
+<dialog id="slot-detail-modal" class="rounded-xl border border-slate-700/80 p-0 shadow-2xl max-w-lg w-[calc(100%-2rem)] bg-[#1E293B] text-[#F8FAFC] backdrop-blur-2xl">
   <div class="p-6">
     <div class="flex items-start justify-between gap-3">
       <div class="flex items-center gap-3">
-        <div id="modal-type-icon" class="w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-md"></div>
+        <div id="modal-type-icon" class="w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-md border"></div>
         <div>
-          <span id="modal-badge" class="px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border"></span>
-          <h3 id="modal-subject" class="text-base font-extrabold mt-1 text-slate-900 dark:text-white"></h3>
+          <span id="modal-badge" class="px-2 py-0.5 rounded-lg text-[9px] font-bold uppercase tracking-wider border"></span>
+          <h3 id="modal-subject" class="text-base font-extrabold mt-1 text-[#F8FAFC]"></h3>
         </div>
       </div>
       <button type="button" onclick="document.getElementById('slot-detail-modal').close()" 
-              class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 flex items-center justify-center transition">
+              class="w-8 h-8 rounded-xl bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition border border-slate-700">
         <i class="fa-solid fa-xmark"></i>
       </button>
     </div>
 
     <!-- Metadata Details -->
-    <div class="mt-5 space-y-2.5 text-xs bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
-      <div class="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-slate-700/60">
-        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-user-tie text-indigo-500"></i> Assigned Faculty</span>
-        <span id="modal-teacher" class="font-bold text-slate-800 dark:text-slate-200"></span>
+    <div class="mt-5 space-y-2.5 text-xs bg-[#0F172A]/70 p-4 rounded-xl border border-slate-800">
+      <div class="flex justify-between items-center py-1 border-b border-slate-800">
+        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-user-tie text-cyan-400"></i> Assigned Faculty</span>
+        <span id="modal-teacher" class="font-bold text-[#F8FAFC]"></span>
       </div>
-      <div class="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-slate-700/60">
-        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-users text-indigo-500"></i> Division</span>
-        <span id="modal-division" class="font-bold text-slate-800 dark:text-slate-200"></span>
+      <div class="flex justify-between items-center py-1 border-b border-slate-800">
+        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-users text-cyan-400"></i> Division</span>
+        <span id="modal-division" class="font-bold text-[#F8FAFC]"></span>
       </div>
-      <div class="flex justify-between items-center py-1 border-b border-slate-200/60 dark:border-slate-700/60">
-        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-door-open text-indigo-500"></i> Room & Capacity</span>
-        <span id="modal-room" class="font-bold text-slate-800 dark:text-slate-200 font-mono"></span>
+      <div class="flex justify-between items-center py-1 border-b border-slate-800">
+        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-door-open text-cyan-400"></i> Room & Capacity</span>
+        <span id="modal-room" class="font-bold text-[#F8FAFC] font-mono"></span>
       </div>
       <div class="flex justify-between items-center py-1">
-        <span class="text-slate-500 dark:text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock text-indigo-500"></i> Time Slot</span>
-        <span id="modal-slot" class="font-bold text-slate-800 dark:text-slate-200 font-mono"></span>
+        <span class="text-slate-400 flex items-center gap-2"><i class="fa-solid fa-clock text-cyan-400"></i> Time Slot</span>
+        <span id="modal-slot" class="font-bold text-[#F8FAFC] font-mono"></span>
       </div>
     </div>
 
     <!-- Faculty Substitution Section (for Administrators) -->
     {% if user.is_superuser or user.is_staff %}
-    <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800">
+    <div class="mt-4 pt-3 border-t border-slate-800">
       <div class="flex items-center justify-between mb-2">
-        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-          <i class="fa-solid fa-user-shield text-indigo-500"></i> Available Substitute Faculty
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+          <i class="fa-solid fa-user-shield text-cyan-400"></i> Available Substitute Faculty
         </span>
-        <button type="button" id="btn-load-subs" onclick="fetchSubstitutes()" class="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline font-bold">
+        <button type="button" id="btn-load-subs" onclick="fetchSubstitutes()" class="text-[10px] text-cyan-400 hover:text-cyan-300 font-bold">
           Refresh List
         </button>
       </div>
-      <div id="substitutes-container" class="max-h-36 overflow-y-auto space-y-1.5 p-1 rounded-xl bg-slate-50/80 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800 text-[11px]">
-        <div class="p-3 text-center text-slate-400">Click to check available faculty for this slot.</div>
+      <div id="substitutes-container" class="max-h-36 overflow-y-auto space-y-1.5 p-1 rounded-xl bg-[#0F172A]/70 border border-slate-800 text-[11px]">
+        <div class="p-3 text-center text-slate-500">Click to check available faculty for this slot.</div>
       </div>
     </div>
     {% endif %}
 
-    <div class="mt-6 flex justify-end gap-2">
-      <button type="button" onclick="document.getElementById('slot-detail-modal').close()" class="btn-primary !text-xs !py-2">
+    <!-- Footer Controls -->
+    <div class="mt-6 flex justify-end gap-2 border-t border-slate-800 pt-3">
+      <button type="button" onclick="document.getElementById('slot-detail-modal').close()" class="btn-ghost !text-xs !py-2 !rounded-xl">
         Close
       </button>
     </div>
   </div>
 </dialog>
 
-<script>
-var currentEntryId = null;
+<!-- ===========================================================================
+     Toast Container for Smooth Interactive Feedback
+     =========================================================================== -->
+<div id="timetable-toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-2 max-w-md w-full pointer-events-none"></div>
 
-function showSlotModal(entryId, subject, code, teacher, division, room, capacity, slotCode, timeRange, isLab) {
-  currentEntryId = entryId;
+<!-- ===========================================================================
+     JavaScript Engine: Drag & Drop, Conflict Alert & Instant Portal Updates
+     =========================================================================== -->
+<script>
+var currentEntryData = null;
+var draggedCardData = null;
+
+function getCsrfToken() {
+  var csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+  return csrfInput ? csrfInput.value : '';
+}
+
+/* ==========================================================================
+   1. Drag and Drop Interaction
+   ========================================================================== */
+function handleCardDragStart(e, cardEl) {
+  draggedCardData = {
+    entryId: cardEl.getAttribute('data-entry-id'),
+    subject: cardEl.getAttribute('data-subject'),
+    code: cardEl.getAttribute('data-code'),
+    isLab: cardEl.getAttribute('data-is-lab') === 'true',
+    teacherId: cardEl.getAttribute('data-teacher-id'),
+    teacherName: cardEl.getAttribute('data-teacher-name'),
+    teacherEmail: cardEl.getAttribute('data-teacher-email'),
+    divisionName: cardEl.getAttribute('data-division-name'),
+    divisionYear: cardEl.getAttribute('data-division-year'),
+    roomName: cardEl.getAttribute('data-room-name'),
+    slotCode: cardEl.getAttribute('data-slot-code'),
+    day: cardEl.getAttribute('data-day'),
+    period: cardEl.getAttribute('data-period'),
+    timeRange: cardEl.getAttribute('data-time-range'),
+  };
+
+  e.dataTransfer.setData('text/plain', draggedCardData.entryId);
+  e.dataTransfer.effectAllowed = 'move';
+
+  // Visual cues: GPU-accelerated transform & table class
+  cardEl.classList.add('opacity-40', 'scale-95', 'ring-2', 'ring-cyan-400');
+  var table = document.getElementById('timetable-matrix');
+  if (table) table.classList.add('drag-active');
+}
+
+function handleCardDragEnd(e, cardEl) {
+  cardEl.classList.remove('opacity-40', 'scale-95', 'ring-2', 'ring-cyan-400');
+  var table = document.getElementById('timetable-matrix');
+  if (table) table.classList.remove('drag-active');
+  document.querySelectorAll('.timetable-cell.ring-cyan-500').forEach(function(cell) {
+    cell.classList.remove('ring-2', 'ring-cyan-500', 'bg-cyan-950/40');
+  });
+}
+
+function handleCellDragOver(e, cellEl) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  if (!cellEl.classList.contains('ring-cyan-500')) {
+    cellEl.classList.add('ring-2', 'ring-cyan-500', 'bg-cyan-950/40');
+  }
+}
+
+function handleCellDragLeave(e, cellEl) {
+  cellEl.classList.remove('ring-2', 'ring-cyan-500', 'bg-cyan-950/40');
+}
+
+function handleCellDrop(e, cellEl, targetDay, targetPeriod, targetEntryId) {
+  e.preventDefault();
+  cellEl.classList.remove('ring-2', 'ring-cyan-500', 'bg-cyan-950/40');
+
+  if (!draggedCardData) return;
+
+  var sourceEntryId = draggedCardData.entryId;
+  var sourceDay = draggedCardData.day;
+  var sourcePeriod = draggedCardData.period;
+
+  // Dropped in the same exact slot
+  if (sourceDay === targetDay && sourcePeriod == targetPeriod) {
+    return;
+  }
+
+  // Show inline loader on cell
+  var originalCellContent = cellEl.innerHTML;
+  cellEl.innerHTML = '<div class="h-full flex items-center justify-center p-4 text-cyan-400">' +
+                     '<i class="fa-solid fa-spinner fa-spin text-xl"></i>' +
+                     '</div>';
+
+  var csrf = getCsrfToken();
+
+  if (targetEntryId) {
+    // Drop onto another scheduled class -> LIVE SWAP
+    var formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrf);
+    formData.append('entry_a_id', sourceEntryId);
+    formData.append('entry_b_id', targetEntryId);
+
+    fetch('{% url "scheduler:live_swap_api" %}', {
+      method: 'POST',
+      body: formData,
+    })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+      if (!res.ok) {
+        cellEl.innerHTML = originalCellContent;
+        showConflictModal(res.data.conflicts || [res.data.error || 'Conflict encountered during class swap.']);
+      } else {
+        showToast('success', res.data.message || 'Classes swapped successfully. Respective teacher & class portals notified.');
+        setTimeout(function() { window.location.reload(); }, 1200);
+      }
+    })
+    .catch(function(err) {
+      cellEl.innerHTML = originalCellContent;
+      showToast('error', 'Network error during class swap.');
+    });
+
+  } else {
+    // Drop onto empty slot -> LIVE MOVE
+    var formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrf);
+    formData.append('entry_id', sourceEntryId);
+    formData.append('day', targetDay);
+    formData.append('period', targetPeriod);
+
+    fetch('{% url "scheduler:live_move_api" %}', {
+      method: 'POST',
+      body: formData,
+    })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+      if (!res.ok) {
+        cellEl.innerHTML = originalCellContent;
+        showConflictModal(res.data.conflicts || [res.data.error || 'Conflict encountered during slot reassignment.']);
+      } else {
+        var d = res.data;
+        showToast('success', d.message || 'Class rescheduled successfully. Respective teacher & class portals notified.');
+        setTimeout(function() { window.location.reload(); }, 1200);
+      }
+    })
+    .catch(function(err) {
+      cellEl.innerHTML = originalCellContent;
+      showToast('error', 'Network error during slot reassignment.');
+    });
+  }
+}
+
+/* ==========================================================================
+   2. Conflict Alert Modal Rendering
+   ========================================================================== */
+function showConflictModal(conflicts) {
+  var modal = document.getElementById('conflict-alert-modal');
+  var container = document.getElementById('conflict-details-container');
+  container.innerHTML = '';
+
+  conflicts.forEach(function(msg) {
+    var icon = 'fa-circle-exclamation';
+    var iconColor = 'text-rose-400 bg-rose-950/60 border-rose-800';
+    var badgeText = 'Constraint Conflict';
+
+    if (msg.indexOf('Classroom / Lab') !== -1 || msg.indexOf('Room') !== -1) {
+      icon = 'fa-door-open';
+      badgeText = 'Classroom / Lab Occupied';
+      iconColor = 'text-amber-400 bg-amber-950/60 border-amber-800';
+    } else if (msg.indexOf('Teacher Availability') !== -1 || msg.indexOf('Faculty') !== -1 || msg.indexOf('teaches') !== -1) {
+      icon = 'fa-user-tie';
+      badgeText = 'Faculty Busy';
+      iconColor = 'text-rose-400 bg-rose-950/60 border-rose-800';
+    } else if (msg.indexOf('Student Availability') !== -1 || msg.indexOf('class') !== -1) {
+      icon = 'fa-users';
+      badgeText = 'Student Division Busy';
+      iconColor = 'text-indigo-400 bg-indigo-950/60 border-indigo-800';
+    } else if (msg.indexOf('Mismatch') !== -1 || msg.indexOf('laboratory') !== -1) {
+      icon = 'fa-flask';
+      badgeText = 'Room Type Incompatible';
+      iconColor = 'text-cyan-400 bg-cyan-950/60 border-cyan-800';
+    } else if (msg.indexOf('Capacity') !== -1 || msg.indexOf('seats') !== -1) {
+      icon = 'fa-people-group';
+      badgeText = 'Room Capacity Exceeded';
+      iconColor = 'text-amber-400 bg-amber-950/60 border-amber-800';
+    } else if (msg.indexOf('unavailable') !== -1) {
+      icon = 'fa-calendar-xmark';
+      badgeText = 'Faculty On-Leave';
+      iconColor = 'text-rose-400 bg-rose-950/60 border-rose-800';
+    }
+
+    var item = document.createElement('div');
+    item.className = 'flex items-start gap-3 p-3.5 rounded-xl bg-[#0F172A] border border-slate-800 shadow-sm';
+    item.innerHTML = 
+      '<div class="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ' + iconColor + '">' +
+        '<i class="fa-solid ' + icon + ' text-sm"></i>' +
+      '</div>' +
+      '<div class="min-w-0 flex-1">' +
+        '<span class="text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-lg bg-slate-800 text-slate-300 border border-slate-700">' + badgeText + '</span>' +
+        '<p class="text-xs font-semibold text-[#F8FAFC] mt-1 leading-snug">' + msg + '</p>' +
+      '</div>';
+    container.appendChild(item);
+  });
+
+  modal.showModal();
+}
+
+/* ==========================================================================
+   3. Class Detail Modal & Substitute Finder
+   ========================================================================== */
+function showSlotModal(entryId, subject, code, teacher, teacherId, teacherEmail, division, room, capacity, slotCode, timeRange, isLab) {
+  currentEntryData = {
+    entryId: entryId,
+    subject: subject,
+    code: code,
+    teacher: teacher,
+    teacherId: teacherId,
+    teacherEmail: teacherEmail,
+    division: division,
+    room: room,
+    capacity: capacity,
+    slotCode: slotCode,
+    timeRange: timeRange,
+    isLab: isLab
+  };
+
   var modal = document.getElementById('slot-detail-modal');
   var icon = document.getElementById('modal-type-icon');
   var badge = document.getElementById('modal-badge');
@@ -176,21 +512,20 @@ function showSlotModal(entryId, subject, code, teacher, division, room, capacity
   document.getElementById('modal-slot').textContent = slotCode + ' • ' + timeRange;
 
   if (isLab) {
-    icon.className = 'w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-md bg-purple-100 dark:bg-purple-950 text-purple-600 dark:text-purple-300';
+    icon.className = 'w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-md bg-cyan-950/60 text-cyan-400 border border-cyan-800';
     icon.innerHTML = '<i class="fa-solid fa-flask"></i>';
-    badge.className = 'px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border bg-purple-100 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800';
+    badge.className = 'status-pill-cyan !text-[9px] !py-0.5 !px-2';
     badge.textContent = 'Laboratory Session';
   } else {
-    icon.className = 'w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-md bg-indigo-100 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-300';
+    icon.className = 'w-12 h-12 rounded-xl flex items-center justify-center text-xl shadow-md bg-indigo-950/60 text-indigo-400 border border-indigo-800';
     icon.innerHTML = '<i class="fa-solid fa-book-open"></i>';
-    badge.className = 'px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800';
+    badge.className = 'status-pill-indigo !text-[9px] !py-0.5 !px-2';
     badge.textContent = 'Theory Lecture';
   }
 
-  // Clear existing substitutes preview
   var container = document.getElementById('substitutes-container');
   if (container) {
-    container.innerHTML = '<div class="p-2 text-center text-slate-400">Loading verified substitute faculty...</div>';
+    container.innerHTML = '<div class="p-2 text-center text-slate-500">Click below or refresh to inspect substitute faculty.</div>';
     fetchSubstitutes();
   }
 
@@ -198,33 +533,88 @@ function showSlotModal(entryId, subject, code, teacher, division, room, capacity
 }
 
 function fetchSubstitutes() {
-  if (!currentEntryId) return;
+  if (!currentEntryData || !currentEntryData.entryId) return;
   var container = document.getElementById('substitutes-container');
   if (!container) return;
 
-  fetch('{% url "scheduler:faculty_substitution_api" %}?entry_id=' + currentEntryId)
+  fetch('{% url "scheduler:faculty_substitution_api" %}?entry_id=' + currentEntryData.entryId)
     .then(function(r) { return r.json(); })
     .then(function(data) {
       if (!data.success || !data.substitutes || data.substitutes.length === 0) {
-        container.innerHTML = '<div class="p-2 text-center text-slate-400">No other faculty available in the college.</div>';
+        container.innerHTML = '<div class="p-2 text-center text-slate-500">No other faculty available in the college.</div>';
         return;
       }
       var html = '';
       data.substitutes.forEach(function(sub) {
-        var badgeColor = sub.eligible ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400';
-        html += '<div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">' +
+        var badgeColor = sub.eligible ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-slate-800 text-slate-400 border border-slate-700';
+        html += '<div class="flex items-center justify-between p-2 rounded-xl bg-[#0F172A] border border-slate-800">' +
                   '<div class="flex items-center gap-2">' +
                     '<i class="fa-solid fa-user text-[10px] text-slate-400"></i>' +
-                    '<span class="font-bold text-slate-800 dark:text-slate-200">' + sub.name + '</span>' +
-                    '<span class="text-[10px] text-slate-400">(' + sub.current_hours + '/' + sub.max_hours + 'h)</span>' +
+                    '<span class="font-bold text-[#F8FAFC]">' + sub.name + '</span>' +
+                    '<span class="text-[10px] text-slate-400 font-mono">(' + sub.current_hours + '/' + sub.max_hours + 'h)</span>' +
                   '</div>' +
-                  '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold ' + badgeColor + '">' + sub.status + '</span>' +
+                  '<span class="px-2 py-0.5 rounded-lg text-[9px] font-bold ' + badgeColor + '">' + sub.status + '</span>' +
                 '</div>';
       });
       container.innerHTML = html;
     })
     .catch(function() {
-      container.innerHTML = '<div class="p-2 text-center text-rose-500">Failed to load substitutes.</div>';
+      container.innerHTML = '<div class="p-2 text-center text-rose-400">Failed to load substitutes.</div>';
     });
+}
+
+/* ==========================================================================
+   4. Toast Notification System
+   ========================================================================== */
+function showToast(type, message, action) {
+  var container = document.getElementById('timetable-toast-container');
+  var toast = document.createElement('div');
+  toast.className = 'pointer-events-auto p-4 rounded-xl shadow-2xl flex items-start gap-3 backdrop-blur-xl border transition-all duration-300 animate-slide-up ' +
+                    (type === 'success' 
+                      ? 'bg-[#1E293B] text-[#F8FAFC] border-slate-700 shadow-indigo-500/10' 
+                      : 'bg-rose-950/95 text-white border-rose-800 shadow-rose-500/20');
+
+  var icon = type === 'success' ? 'fa-circle-check text-cyan-400' : 'fa-circle-exclamation text-rose-400';
+  var actionBtnHtml = '';
+  if (action && action.label) {
+    actionBtnHtml = '<button type="button" class="mt-2 btn-primary !text-[11px] !py-1 !px-3 shadow-none bg-indigo-600 hover:bg-indigo-500 text-white js-toast-action !rounded-xl">' +
+                    '<i class="fa-solid fa-paper-plane text-[10px]"></i> ' + action.label +
+                    '</button>';
+  }
+
+  toast.innerHTML = 
+    '<i class="fa-solid ' + icon + ' text-base mt-0.5 shrink-0"></i>' +
+    '<div class="flex-1 min-w-0">' +
+      '<p class="text-xs font-semibold leading-relaxed text-[#F8FAFC]">' + message + '</p>' +
+      actionBtnHtml +
+    '</div>' +
+    '<button type="button" class="text-slate-400 hover:text-white shrink-0 js-toast-close text-xs p-1">' +
+      '<i class="fa-solid fa-xmark"></i>' +
+    '</button>';
+
+  container.appendChild(toast);
+
+  if (action && action.onClick) {
+    var actBtn = toast.querySelector('.js-toast-action');
+    if (actBtn) {
+      actBtn.addEventListener('click', function() {
+        action.onClick();
+        toast.remove();
+      });
+    }
+  }
+
+  var closeBtn = toast.querySelector('.js-toast-close');
+  if (closeBtn) {
+    closeBtn.addEventListener('click', function() { toast.remove(); });
+  }
+
+  setTimeout(function() {
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      setTimeout(function() { toast.remove(); }, 300);
+    }
+  }, 7000);
 }
 </script>

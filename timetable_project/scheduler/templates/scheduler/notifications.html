@@ -1,33 +1,40 @@
 {% extends "scheduler/base.html" %}
 
-{% block title %}Notifications | Automatic Timetable Generator{% endblock %}
+{% block title %}Notifications Inbox | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
 <div class="max-w-4xl space-y-5">
 
-  <div class="card p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4">
+  <div class="card p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     <div>
-      <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-        <i class="fa-solid fa-bell text-indigo-600"></i> Notifications
+      <div class="flex items-center gap-2 mb-1">
+        <span class="status-pill-cyan !text-[10px]">
+          <span class="status-dot-cyan"></span> Live Activity Feed
+        </span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+        <i class="fa-solid fa-bell text-cyan-400"></i> Notification Center
         {% if unread_count %}
-        <span class="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-rose-500 text-white">{{ unread_count }}</span>
+        <span class="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-cyan-950 text-cyan-300 border border-cyan-800 shadow-glow-cyan-sm">
+          {{ unread_count }} new
+        </span>
         {% endif %}
       </h1>
-      <p class="text-xs sm:text-sm text-slate-500 mt-1">
-        Scheduling problems and changes to your own timetable.
+      <p class="text-xs sm:text-sm text-slate-400 mt-1">
+        Instant logs of class reschedules, room swaps, and timetable updates affecting your schedule.
       </p>
     </div>
 
-    <div class="flex flex-wrap items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2.5">
       <a href="{% if only_unread %}{% url 'scheduler:notifications' %}{% else %}?filter=unread{% endif %}"
-         class="btn-ghost !text-xs !py-2">
-        <i class="fa-solid fa-filter"></i> {% if only_unread %}Show All{% else %}Unread Only{% endif %}
+         class="btn-ghost !text-xs !py-2 !rounded-xl">
+        <i class="fa-solid fa-filter text-cyan-400"></i> {% if only_unread %}Show All{% else %}Unread Only{% endif %}
       </a>
       {% if unread_count %}
       <form method="POST" action="{% url 'scheduler:notifications_read_all' %}" class="js-confirm"
             data-confirm="Mark all {{ unread_count }} notification(s) as read?">
         {% csrf_token %}
-        <button class="btn-secondary !text-xs !py-2">
+        <button class="btn-primary !text-xs !py-2 !px-4 !rounded-xl shadow-glow-indigo-sm">
           <i class="fa-solid fa-check-double"></i> Mark All Read
         </button>
       </form>
@@ -36,65 +43,74 @@
   </div>
 
   {% if not page.object_list %}
-    <div class="card p-8 text-center">
-      <div class="w-14 h-14 rounded-2xl bg-slate-100 grid place-items-center mx-auto">
-        <i class="fa-solid fa-bell-slash text-slate-400 text-2xl"></i>
+    <div class="card p-12 text-center bg-[#1E293B]/80 border border-slate-800 rounded-xl">
+      <div class="w-14 h-14 rounded-xl bg-slate-800 text-slate-400 border border-slate-700 grid place-items-center mx-auto text-xl mb-3">
+        <i class="fa-solid fa-bell-slash text-cyan-400/60"></i>
       </div>
-      <h2 class="text-base font-extrabold text-slate-900 mt-4">
-        {% if only_unread %}Nothing unread{% else %}No notifications yet{% endif %}
+      <h2 class="text-base font-extrabold text-[#F8FAFC]">
+        {% if only_unread %}Nothing unread{% else %}No notifications recorded{% endif %}
       </h2>
-      <p class="text-xs text-slate-500 mt-1">
-        You will be told here when a scheduling problem needs attention, or when
-        your own timetable changes.
+      <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+        When an administrator reschedules or modifies your timetable slot, automated alerts will appear instantly right here.
       </p>
     </div>
   {% else %}
-    <div class="space-y-2.5">
+    <div class="space-y-3">
       {% for note in page.object_list %}
-      <div class="card p-4 flex gap-3.5 {% if note.is_read %}opacity-70{% else %}border-l-4{% endif %}
+      <div class="card p-4.5 flex gap-4 rounded-xl bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 shadow-md transition-all hover:border-slate-700
+        {% if note.is_read %}opacity-60 hover:opacity-100{% else %}border-l-4 shadow-lg{% endif %}
         {% if note.severity == 'critical' %}border-l-rose-500
         {% elif note.severity == 'warning' %}border-l-amber-500
-        {% elif note.severity == 'success' %}border-l-emerald-500
+        {% elif note.severity == 'success' %}border-l-cyan-400
         {% else %}border-l-indigo-500{% endif %}">
 
-        <div class="w-9 h-9 rounded-xl grid place-items-center shrink-0
-          {% if note.severity == 'critical' %}bg-rose-100 text-rose-600
-          {% elif note.severity == 'warning' %}bg-amber-100 text-amber-600
-          {% elif note.severity == 'success' %}bg-emerald-100 text-emerald-600
-          {% else %}bg-indigo-100 text-indigo-600{% endif %}">
+        <div class="w-10 h-10 rounded-xl grid place-items-center shrink-0 border
+          {% if note.severity == 'critical' %}bg-rose-950/60 text-rose-400 border-rose-800/80
+          {% elif note.severity == 'warning' %}bg-amber-950/60 text-amber-400 border-amber-800/80
+          {% elif note.severity == 'success' %}bg-cyan-950/60 text-cyan-400 border-cyan-800/80
+          {% else %}bg-indigo-950/60 text-indigo-400 border-indigo-800/80{% endif %}">
           <i class="fa-solid
             {% if note.kind == 'ISSUE' %}fa-triangle-exclamation
             {% elif note.kind == 'PROPOSAL' %}fa-lightbulb
             {% elif note.kind == 'TIMETABLE_CHANGED' %}fa-calendar-day
             {% elif note.kind == 'RESOLVED' %}fa-circle-check
-            {% else %}fa-circle-info{% endif %}"></i>
+            {% else %}fa-circle-info{% endif %} text-sm"></i>
         </div>
 
         <div class="flex-1 min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            <p class="text-xs font-bold text-slate-900">{{ note.title }}</p>
-            {% if not note.is_read %}
-            <span class="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-            {% endif %}
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+              <p class="text-xs font-bold text-[#F8FAFC] tracking-tight">{{ note.title }}</p>
+              {% if not note.is_read %}
+              <span class="w-2 h-2 rounded-full bg-cyan-400 shadow-glow-cyan-sm shrink-0"></span>
+              {% endif %}
+            </div>
+            <span class="text-[10px] text-slate-400 font-mono">{{ note.created_at|timesince }} ago</span>
           </div>
+
           {% if note.body %}
-          <p class="text-[11px] text-slate-600 leading-relaxed mt-1 whitespace-pre-line">{{ note.body }}</p>
+          <p class="text-[11px] text-slate-300 leading-relaxed mt-1.5 whitespace-pre-line font-normal">{{ note.body }}</p>
           {% endif %}
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2">
-            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wide">{{ note.get_kind_display }}</span>
-            <span class="text-[10px] text-slate-400">{{ note.created_at|timesince }} ago</span>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2 border-t border-slate-800/80">
+            <span class="status-pill-indigo !text-[9px] !py-0.5 !px-2">{{ note.get_kind_display }}</span>
+            
             {% if note.url %}
             <form method="POST" action="{% url 'scheduler:notification_read' note.pk %}" class="inline">
               {% csrf_token %}
-              <button class="text-[10px] font-bold text-indigo-600 hover:underline">
-                Mark read{% if note.url %} &amp; open{% endif %}
+              <button class="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1">
+                Mark read &amp; view timetable <i class="fa-solid fa-arrow-right text-[9px]"></i>
               </button>
             </form>
             {% else %}
+            {% if not note.is_read %}
             <form method="POST" action="{% url 'scheduler:notification_read' note.pk %}" class="inline">
               {% csrf_token %}
-              <button class="text-[10px] font-bold text-indigo-600 hover:underline">Mark read</button>
+              <button class="text-[11px] font-bold text-cyan-400 hover:text-cyan-300 transition flex items-center gap-1">
+                <i class="fa-solid fa-check text-[9px]"></i> Mark as read
+              </button>
             </form>
+            {% endif %}
             {% endif %}
           </div>
         </div>
@@ -103,15 +119,15 @@
     </div>
 
     {% if page.has_other_pages %}
-    <div class="flex items-center justify-center gap-2 pt-2">
+    <div class="flex items-center justify-center gap-2 pt-3">
       {% if page.has_previous %}
       <a href="?page={{ page.previous_page_number }}{% if only_unread %}&filter=unread{% endif %}"
-         class="btn-ghost !text-xs !py-2"><i class="fa-solid fa-chevron-left"></i> Newer</a>
+         class="btn-ghost !text-xs !py-2 !rounded-xl"><i class="fa-solid fa-chevron-left"></i> Newer</a>
       {% endif %}
-      <span class="text-[11px] text-slate-500 px-3">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      <span class="text-[11px] text-slate-400 px-3 font-mono">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
       {% if page.has_next %}
       <a href="?page={{ page.next_page_number }}{% if only_unread %}&filter=unread{% endif %}"
-         class="btn-ghost !text-xs !py-2">Older <i class="fa-solid fa-chevron-right"></i></a>
+         class="btn-ghost !text-xs !py-2 !rounded-xl">Older <i class="fa-solid fa-chevron-right"></i></a>
       {% endif %}
     </div>
     {% endif %}

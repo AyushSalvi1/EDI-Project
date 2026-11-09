@@ -7,20 +7,25 @@
   <div class="w-full max-w-5xl grid lg:grid-cols-12 gap-6 items-stretch">
 
     <!-- Sign-in Form (Left 5 cols) -->
-    <div class="card p-6 sm:p-8 lg:col-span-5 flex flex-col justify-between">
+    <div class="card p-6 sm:p-8 lg:col-span-5 flex flex-col justify-between bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl relative">
+      <div class="absolute -top-10 -left-10 w-40 h-40 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
       <div>
         <div class="text-center mb-6">
-          <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center mx-auto shadow-md shadow-indigo-500/25 mb-3 text-white text-lg">
-            <i class="fa-solid fa-right-to-bracket"></i>
+          <div class="w-12 h-12 rounded-xl bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center mx-auto shadow-glow-indigo-sm mb-3 text-lg">
+            <i class="fa-solid fa-right-to-bracket text-cyan-400"></i>
           </div>
-          <h1 class="text-xl font-extrabold text-slate-900 dark:text-white font-display">Sign In to Timetable OS</h1>
-          <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">Access your personalized college timetable</p>
+          <span class="status-pill-indigo mb-2 !text-[10px]">
+            <span class="status-dot-cyan"></span> Enterprise Timetable OS
+          </span>
+          <h1 class="text-xl font-extrabold text-[#F8FAFC] font-display mt-1 tracking-tight">Portal Authentication</h1>
+          <p class="text-xs text-slate-400 mt-1">Access your personalized college timetable</p>
         </div>
 
         {% if form.errors %}
-        <div class="mb-4 p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs font-medium flex items-center gap-2">
-          <i class="fa-solid fa-circle-exclamation text-rose-500"></i>
-          <span>Invalid username or password credentials.</span>
+        <div class="mb-4 p-3.5 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-200 text-xs font-medium flex items-center gap-2">
+          <i class="fa-solid fa-circle-exclamation text-rose-400"></i>
+          <span>Invalid credentials. The username or password was not recognised.</span>
         </div>
         {% endif %}
 
@@ -29,80 +34,80 @@
           <input type="hidden" name="next" value="{{ next }}">
 
           <div>
-            <label for="{{ form.username.id_for_label }}" class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Username</label>
+            <label for="{{ form.username.id_for_label }}" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Username</label>
             <div class="relative">
-              <i class="fa-solid fa-user absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <i class="fa-solid fa-user absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
               <input type="text" name="username" id="{{ form.username.id_for_label }}"
                      autocomplete="username" autofocus required
                      value="{{ form.username.value|default:'' }}"
                      placeholder="e.g. prn.1252070006 or vit.10747"
-                     class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                     class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 text-sm bg-[#0F172A] text-[#F8FAFC] placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
             </div>
           </div>
 
           <div>
-            <label for="{{ form.password.id_for_label }}" class="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
+            <label for="{{ form.password.id_for_label }}" class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
             <div class="relative">
-              <i class="fa-solid fa-lock absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+              <i class="fa-solid fa-lock absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
               <input type="password" name="password" id="{{ form.password.id_for_label }}"
                      autocomplete="current-password" required
                      placeholder="Password"
-                     class="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-sm bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none">
+                     class="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-slate-700 text-sm bg-[#0F172A] text-[#F8FAFC] placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition">
             </div>
           </div>
 
-          <button type="submit" class="btn-primary w-full justify-center !py-2.5 shadow-indigo-600/30">
-            <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In
+          <button type="submit" class="btn-primary w-full justify-center !py-2.5 !rounded-xl text-sm font-bold shadow-glow-indigo-sm">
+            <i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to Portal
           </button>
         </form>
       </div>
 
-      <div class="mt-6 pt-5 border-t border-slate-200 dark:border-slate-800 text-center">
-        <p class="text-[11px] text-slate-400 dark:text-slate-500">
-          Faculty password: <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">Teacher@123</code> &bull; Student: <code class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-mono">Student@123</code>
+      <div class="mt-6 pt-5 border-t border-slate-800 text-center">
+        <p class="text-[11px] text-slate-400">
+          Faculty password: <code class="px-1.5 py-0.5 rounded-lg bg-[#0F172A] text-cyan-400 border border-slate-800 font-mono">Teacher@123</code> &bull; Student: <code class="px-1.5 py-0.5 rounded-lg bg-[#0F172A] text-indigo-400 border border-slate-800 font-mono">Student@123</code>
         </p>
       </div>
     </div>
 
     <!-- Directory & Quick 1-Click Sign-in (Right 7 cols) with Tabs -->
-    <div class="card p-6 sm:p-8 lg:col-span-7 flex flex-col justify-between">
+    <div class="card p-6 sm:p-8 lg:col-span-7 flex flex-col justify-between bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl relative">
       <div>
         <!-- Tab Switcher -->
-        <div class="flex items-center justify-between gap-3 mb-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div class="flex items-center justify-between gap-3 mb-3 border-b border-slate-800 pb-3">
           <div class="flex items-center gap-2">
             <button type="button" id="tab-faculty-btn" onclick="switchTab('faculty')"
-                    class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm">
+                    class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-glow-indigo-sm">
               <i class="fa-solid fa-chalkboard-user"></i> Faculty ({{ teachers|length }})
             </button>
             <button type="button" id="tab-students-btn" onclick="switchTab('students')"
-                    class="px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800">
-              <i class="fa-solid fa-user-graduate text-emerald-500"></i> Students ({{ students|length }})
+                    class="px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent">
+              <i class="fa-solid fa-user-graduate text-cyan-400"></i> Students ({{ students|length }})
             </button>
           </div>
-          <span class="text-[10px] text-slate-400">Click to autofill</span>
+          <span class="text-[10px] text-slate-500 font-mono">Click any member to autofill</span>
         </div>
 
         <!-- Filter Search Bar -->
         <div class="relative mb-3">
-          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
           <input type="text" id="dir-filter" oninput="filterDirectory()" placeholder="Filter by name, PRN, or username..."
-                 class="w-full pl-9 pr-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500">
+                 class="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] placeholder-slate-500 outline-none focus:ring-2 focus:ring-indigo-500 transition">
         </div>
 
         <!-- Scrollable Faculty Grid -->
-        <div id="faculty-list" class="max-h-[330px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100 dark:divide-slate-800">
+        <div id="faculty-list" class="max-h-[330px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-800/60">
           {% for t in teachers %}
-          <div class="dir-item faculty-item pt-1.5 first:pt-0 flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition group cursor-pointer"
+          <div class="dir-item faculty-item pt-1.5 first:pt-0 flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-slate-800/80 transition group cursor-pointer border border-transparent hover:border-slate-700"
                onclick="selectCredentials('{{ t.user.username }}', 'Teacher@123')">
             <div class="min-w-0">
-              <div class="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate">
+              <div class="text-xs font-bold text-[#F8FAFC] group-hover:text-cyan-400 truncate transition-colors">
                 {{ t.name }}
               </div>
-              <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
-                User: <span class="font-bold text-indigo-600 dark:text-indigo-400">{{ t.user.username }}</span> &bull; Max {{ t.max_hours_per_week }}h/wk
+              <div class="text-[10px] text-slate-400 font-mono">
+                User: <span class="font-bold text-cyan-400">{{ t.user.username }}</span> &bull; Max {{ t.max_hours_per_week }}h/wk
               </div>
             </div>
-            <button type="button" class="btn-ghost !text-[10px] !py-1 !px-2.5 shrink-0 opacity-80 group-hover:opacity-100 group-hover:bg-indigo-50 group-hover:text-indigo-600 dark:group-hover:bg-indigo-950 dark:group-hover:text-indigo-300">
+            <button type="button" class="btn-ghost !text-[10px] !py-1 !px-2.5 !rounded-xl shrink-0 opacity-80 group-hover:opacity-100 group-hover:border-cyan-500/50 group-hover:text-cyan-300">
               Select <i class="fa-solid fa-arrow-right text-[8px]"></i>
             </button>
           </div>
@@ -110,19 +115,19 @@
         </div>
 
         <!-- Scrollable Students Grid -->
-        <div id="student-list" class="hidden max-h-[330px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-100 dark:divide-slate-800">
+        <div id="student-list" class="hidden max-h-[330px] overflow-y-auto space-y-1.5 pr-1 divide-y divide-slate-800/60">
           {% for s in students %}
-          <div class="dir-item student-item pt-1.5 first:pt-0 flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition group cursor-pointer"
+          <div class="dir-item student-item pt-1.5 first:pt-0 flex items-center justify-between gap-3 p-2 rounded-xl hover:bg-slate-800/80 transition group cursor-pointer border border-transparent hover:border-slate-700"
                onclick="selectCredentials('{{ s.user.username }}', 'Student@123')">
             <div class="min-w-0">
-              <div class="text-xs font-bold text-slate-800 dark:text-slate-200 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate">
+              <div class="text-xs font-bold text-[#F8FAFC] group-hover:text-indigo-400 truncate transition-colors">
                 {{ s.full_name }}
               </div>
-              <div class="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
-                PRN: <span class="font-bold text-emerald-600 dark:text-emerald-400">{{ s.roll_number }}</span> &bull; Div: {{ s.division.name }}
+              <div class="text-[10px] text-slate-400 font-mono">
+                PRN: <span class="font-bold text-indigo-400">{{ s.roll_number }}</span> &bull; Div: {{ s.division.name }}
               </div>
             </div>
-            <button type="button" class="btn-ghost !text-[10px] !py-1 !px-2.5 shrink-0 opacity-80 group-hover:opacity-100 group-hover:bg-emerald-50 group-hover:text-emerald-600 dark:group-hover:bg-emerald-950 dark:group-hover:text-emerald-300">
+            <button type="button" class="btn-ghost !text-[10px] !py-1 !px-2.5 !rounded-xl shrink-0 opacity-80 group-hover:opacity-100 group-hover:border-indigo-500/50 group-hover:text-indigo-300">
               Select <i class="fa-solid fa-arrow-right text-[8px]"></i>
             </button>
           </div>
@@ -131,11 +136,11 @@
       </div>
 
       <!-- Admin Demo Quick Pill -->
-      <div class="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
-        <span class="text-slate-500 dark:text-slate-400">Admin quick access:</span>
+      <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
+        <span class="text-slate-400 text-xs">Superuser administrative access:</span>
         <button type="button" onclick="selectCredentials('admin', 'admin123')"
-                class="px-3 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 text-slate-700 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5">
-          <i class="fa-solid fa-shield-halved text-rose-500"></i> Fill Admin (admin / admin123)
+                class="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[#F8FAFC] text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+          <i class="fa-solid fa-shield-halved text-cyan-400"></i> Fill Admin (admin / admin123)
         </button>
       </div>
     </div>
@@ -154,13 +159,13 @@ function switchTab(tab) {
   var stuList = document.getElementById('student-list');
 
   if (tab === 'faculty') {
-    facBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-sm';
-    stuBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
+    facBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-indigo-600 text-white shadow-glow-indigo-sm';
+    stuBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent';
     facList.classList.remove('hidden');
     stuList.classList.add('hidden');
   } else {
-    stuBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-emerald-600 text-white shadow-sm';
-    facBtn.className = 'px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800';
+    stuBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 bg-cyan-600 text-white shadow-glow-cyan-sm';
+    facBtn.className = 'px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 text-slate-400 hover:text-white hover:bg-slate-800 border border-transparent';
     stuList.classList.remove('hidden');
     facList.classList.add('hidden');
   }

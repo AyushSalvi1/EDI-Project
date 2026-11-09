@@ -3,84 +3,83 @@
 {% block title %}{{ division.name }} Slot Preference | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl space-y-5">
+<div class="max-w-3xl space-y-6">
 
-  <div class="card p-4 sm:p-6">
-    <a href="{% url 'scheduler:preferences' %}" class="text-[11px] font-bold text-indigo-600 hover:underline">
-      <i class="fa-solid fa-arrow-left"></i> Back to Timetable Preferences
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <a href="{% url 'scheduler:preferences' %}" class="text-xs font-bold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1.5 transition">
+      <i class="fa-solid fa-arrow-left text-[10px]"></i> Back to Institutional Preferences
     </a>
-    <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2 flex items-center gap-2">
-      <i class="fa-solid fa-user-group text-indigo-600"></i> {{ division.name }} &mdash; Preferred Slots
+    <h1 class="text-xl sm:text-2xl font-extrabold text-[#F8FAFC] mt-3 flex items-center gap-2.5">
+      <i class="fa-solid fa-user-group text-cyan-400"></i> {{ division.name }} &mdash; Cohort Timing Parameters
     </h1>
-    <p class="text-xs sm:text-sm text-slate-500 mt-1">
-      Restrict this division to the days and periods it actually attends.
-      {{ division.strength }} students. Takes effect the next time the timetable is generated.
+    <p class="text-xs sm:text-sm text-slate-400 mt-1">
+      Restrict this division to specific active days or period windows. Registered division strength: <strong class="text-white">{{ division.strength }} students</strong>.
     </p>
   </div>
 
   <form method="POST" class="space-y-5">
     {% csrf_token %}
 
-    <div class="card p-4 sm:p-6 space-y-5">
+    <div class="card p-5 sm:p-6 space-y-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
       <div>
-        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-2">Days This Division Attends</label>
+        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Operational Attendance Days</label>
         <div class="flex flex-wrap gap-2">
           {% for key, label in day_choices %}
           <label class="cursor-pointer">
             <input type="checkbox" name="working_days" value="{{ key }}"
                    {% if key in preference.day_list %}checked{% endif %} class="peer sr-only">
-            <span class="inline-flex px-3 py-2 rounded-xl border-2 border-slate-200 text-xs font-bold text-slate-500 transition
-                         peer-checked:border-indigo-500 peer-checked:bg-indigo-50 peer-checked:text-indigo-700
-                         hover:border-slate-300 cursor-pointer">
+            <span class="inline-flex px-3.5 py-2 rounded-xl border border-slate-700 text-xs font-bold text-slate-400 bg-[#0F172A] transition
+                         peer-checked:border-cyan-400 peer-checked:bg-cyan-950/40 peer-checked:text-cyan-300
+                         hover:border-slate-600 cursor-pointer">
               {{ label|slice:":3" }}
             </span>
           </label>
           {% endfor %}
         </div>
-        <p class="text-[11px] text-slate-400 mt-2">Tick none to follow every college working day.</p>
+        <p class="text-[10px] text-slate-500 mt-2">Leave all unchecked to follow full college calendar.</p>
       </div>
 
       <div class="grid sm:grid-cols-2 gap-4">
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">First Period</label>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Starting Period</label>
           <input type="number" name="first_period" min="1" value="{{ preference.first_period }}"
-                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-          <p class="text-[10px] text-slate-400 mt-1">This division starts no earlier than this period.</p>
+                 class="w-full px-3.5 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
+          <p class="text-[10px] text-slate-500 mt-1">Earliest period allowed for this cohort.</p>
         </div>
         <div>
-          <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Last Period</label>
+          <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Ending Period</label>
           <input type="number" name="last_period" min="0" value="{{ preference.last_period }}"
-                 class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
-          <p class="text-[10px] text-slate-400 mt-1">Use 0 for no upper limit.</p>
+                 class="w-full px-3.5 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
+          <p class="text-[10px] text-slate-500 mt-1">Enter 0 for unrestricted period boundary.</p>
         </div>
       </div>
 
       <div>
-        <label class="block text-[11px] font-semibold text-slate-600 uppercase mb-1.5">Note (optional)</label>
+        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Administrative Note</label>
         <input type="text" name="note" maxlength="200" value="{{ preference.note }}"
-               placeholder="e.g. Second year practicals only run in the afternoon"
-               class="w-full px-3 py-2 rounded-xl border border-slate-300 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+               placeholder="e.g. Afternoon shift practicals only"
+               class="w-full px-3.5 py-2 rounded-xl border border-slate-700 text-xs bg-[#0F172A] text-[#F8FAFC] placeholder-slate-500 focus:ring-2 focus:ring-indigo-500 outline-none">
       </div>
     </div>
 
-    <div class="card p-4 sm:p-5">
-      <p class="text-[10px] font-bold text-slate-600 uppercase tracking-wide mb-1">Resulting Availability</p>
-      <p class="text-xs text-slate-700">
-        <strong class="text-indigo-600">{{ allowed_count }}</strong> usable period(s) a week for this division.
+    <div class="card p-5 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+      <p class="text-[10px] font-bold text-slate-400 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+        <i class="fa-solid fa-calculator text-cyan-400"></i> Resulting Availability Window
       </p>
-      <p class="text-[10px] text-slate-400 mt-1">
-        If availability is lower than this division's weekly load, some hours cannot
-        be scheduled and will appear in the Issue Centre.
+      <p class="text-xs text-slate-200">
+        <strong class="text-cyan-400 font-mono text-sm">{{ allowed_count }}</strong> usable period(s) a week available for this division.
       </p>
     </div>
 
-    <div class="flex flex-wrap gap-2">
-      <button class="btn-primary"><i class="fa-solid fa-check"></i> Save Preference</button>
-      <a href="{% url 'scheduler:preferences' %}" class="btn-ghost">Cancel</a>
+    <div class="flex flex-wrap gap-2.5 pt-1">
+      <button class="btn-primary !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-indigo-sm font-bold">
+        <i class="fa-solid fa-check"></i> Save Cohort Policy
+      </button>
+      <a href="{% url 'scheduler:preferences' %}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">Cancel</a>
       {% if preference.pk %}
-      <button type="submit" name="action" value="clear" class="btn-ghost !text-rose-600"
-              onclick="return confirm('Remove this division preference? It will follow the college-wide timetable again.')">
-        <i class="fa-solid fa-trash"></i> Remove Preference
+      <button type="submit" name="action" value="clear" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl !text-rose-400"
+              onclick="return confirm('Remove custom timing policy for {{ division.name }}?')">
+        <i class="fa-solid fa-trash"></i> Reset to Default
       </button>
       {% endif %}
     </div>

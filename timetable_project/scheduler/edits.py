@@ -7,6 +7,7 @@ concurrency and teacher unavailability) before anything is written, so an admin
 can never introduce a conflict that the solver would have prevented.
 """
 
+from datetime import time
 from django.db import transaction
 
 from .models import (
@@ -17,10 +18,18 @@ from .models import (
 )
 
 
+def _format_time(t):
+    """Safely format time whether it is a datetime.time or str."""
+    if hasattr(t, "strftime"):
+        return t.strftime("%H:%M")
+    return str(t)[:5]
+
+
 def placement_conflicts(assignment, time_slot, room, exclude_entry_ids=()):
     """
-    Return a list of human-readable conflicts for placing ``assignment`` into
+    Return a list of rich, human-readable conflicts for placing ``assignment`` into
     ``(time_slot, room)``. An empty list means the placement is legal.
+    Provides complete forensic details of who/what is occupying the slot.
     """
     conflicts = []
     excluded = tuple(exclude_entry_ids) or (None,)
@@ -29,48 +38,101 @@ def placement_conflicts(assignment, time_slot, room, exclude_entry_ids=()):
     division = assignment.division
     teacher = assignment.teacher
 
-    # Rule: room type must match subject type.
+    # Rule 1: Room type must match subject type (Lab vs Classroom)
     if room.is_lab != subject.is_lab:
         required = "laboratory" if subject.is_lab else "theory classroom"
+        actual = "Lab" if room.is_lab else "Classroom"
         conflicts.append(
-            f"'{subject.name}' needs a {required}, but {room.name} is the wrong room type."
+            f"Lab / Classroom Mismatch: '{subject.name}' requires a {required}, but {room.name} is designated as a {actual} (wrong room type)."
         )
 
-    # Rule: room must seat the whole division.
+    # Rule 2: Room must seat the whole division
     if room.capacity < division.strength:
         conflicts.append(
-            f"{room.name} seats {room.capacity}, but {division.name} has {division.strength} students."
+            f"Capacity Deficit: {room.name} seats {room.capacity}, but class {division.name} (Year {division.year}) has {division.strength} students enrolled."
         )
 
-    siblings = TimetableEntry.objects.filter(semester_id=assignment.semester_id).exclude(
-        id__in=excluded
+    siblings = TimetableEntry.objects.filter(
+        semester_id=assignment.semester_id
+    ).exclude(id__in=excluded).select_related(
+        "assignment__subject",
+        "assignment__teacher",
+        "assignment__division",
+        "room",
+        "time_slot",
     )
 
-    # Rule: a room hosts one class per period.
-    if siblings.filter(time_slot=time_slot, room=room).exists():
-        conflicts.append(f"{room.name} is already occupied at {time_slot.slot_code}.")
-
-    # Rule: a teacher teaches one class per period.
-    if siblings.filter(time_slot=time_slot, assignment__teacher_id=assignment.teacher_id).exists():
+    # Rule 3: A room hosts one class per period
+    room_occ = siblings.filter(time_slot=time_slot, room=room).first()
+    if room_occ:
+        r_subj = room_occ.assignment.subject.name
+        r_teacher = room_occ.assignment.teacher.name
+        r_div = room_occ.assignment.division.name
+        r_year = room_occ.assignment.division.year
         conflicts.append(
-            f"{teacher.name} already teaches another class at {time_slot.slot_code}."
+            f"Classroom / Lab Conflict: {room.name} is already occupied at {time_slot.slot_code} "
+            f"({_format_time(time_slot.start_time)}-{_format_time(time_slot.end_time)}) "
+            f"for subject '{r_subj}' allocated to {r_teacher} for class {r_div} (Year {r_year})."
         )
 
-    # Rule: a division attends one class per period.
-    if siblings.filter(time_slot=time_slot, assignment__division_id=assignment.division_id).exists():
+    # Rule 4: A teacher teaches one class per period
+    teacher_occ = siblings.filter(time_slot=time_slot, assignment__teacher_id=assignment.teacher_id).first()
+    if teacher_occ:
+        t_subj = teacher_occ.assignment.subject.name
+        t_div = teacher_occ.assignment.division.name
+        t_year = teacher_occ.assignment.division.year
+        t_room = teacher_occ.room.name
         conflicts.append(
-            f"{division.name} already has a class at {time_slot.slot_code}."
+            f"Teacher Availability Conflict: Faculty {teacher.name} already teaches another class at {time_slot.slot_code} "
+            f"({_format_time(time_slot.start_time)}-{_format_time(time_slot.end_time)}) — "
+            f"conducting '{t_subj}' for class {t_div} (Year {t_year}) in room {t_room}."
         )
 
-    # Rule: teacher unavailability is inviolable.
+    # Rule 5: A division attends one class per period
+    div_occ = siblings.filter(time_slot=time_slot, assignment__division_id=assignment.division_id).first()
+    if div_occ:
+        d_subj = div_occ.assignment.subject.name
+        d_teacher = div_occ.assignment.teacher.name
+        d_room = div_occ.room.name
+        conflicts.append(
+            f"Student Availability Conflict: Class {division.name} (Year {division.year}) already has a class at {time_slot.slot_code} — "
+            f"attending '{d_subj}' with {d_teacher} in room {d_room}."
+        )
+
+    # Rule 6: Teacher unavailability is inviolable
     if TeacherUnavailability.objects.filter(
         teacher_id=assignment.teacher_id, time_slot=time_slot
     ).exists():
         conflicts.append(
-            f"{teacher.name} is marked unavailable at {time_slot.slot_code}."
+            f"Teacher Unavailability: Faculty {teacher.name} is marked unavailable at {time_slot.slot_code} "
+            f"({_format_time(time_slot.start_time)}-{_format_time(time_slot.end_time)})."
         )
 
     return conflicts
+
+
+def find_suitable_room(assignment, time_slot, exclude_entry_ids=()):
+    """
+    Search for a legally available room for ``assignment`` at ``time_slot``.
+    Matches room type (lab vs lecture), capacity, and checks occupancy.
+    """
+    subject = assignment.subject
+    division = assignment.division
+    excluded = tuple(exclude_entry_ids) or (None,)
+
+    occupied_room_ids = set(
+        TimetableEntry.objects.filter(
+            semester_id=assignment.semester_id,
+            time_slot=time_slot
+        ).exclude(id__in=excluded).values_list("room_id", flat=True)
+    )
+
+    candidates = Room.objects.filter(
+        is_lab=subject.is_lab,
+        capacity__gte=division.strength
+    ).exclude(id__in=occupied_room_ids).order_by("capacity")
+
+    return candidates.first()
 
 
 def _describe(entry):
@@ -82,19 +144,35 @@ def _describe(entry):
 
 
 @transaction.atomic
-def move_entry(entry, new_slot, new_room, user=None):
+def move_entry(entry, new_slot, new_room=None, user=None):
     """
     Reschedule a single entry to ``new_slot`` / ``new_room``.
-
+    If ``new_room`` is None, checks ``entry.room`` and auto-finds a legal alternative room if needed.
+    If ``new_room`` is explicitly passed, respects the explicit choice and validates it strictly.
     Returns ``(entry, conflicts)``. On conflict nothing is written.
     """
-    conflicts = placement_conflicts(entry.assignment, new_slot, new_room, [entry.id])
+    if new_room is not None:
+        target_room = new_room
+        conflicts = placement_conflicts(entry.assignment, new_slot, target_room, [entry.id])
+    else:
+        target_room = entry.room
+        initial_conflicts = placement_conflicts(entry.assignment, new_slot, target_room, [entry.id])
+        if initial_conflicts and any("already occupied" in c or "Mismatch" in c or "seats" in c for c in initial_conflicts):
+            alt_room = find_suitable_room(entry.assignment, new_slot, [entry.id])
+            if alt_room:
+                target_room = alt_room
+                conflicts = placement_conflicts(entry.assignment, new_slot, target_room, [entry.id])
+            else:
+                conflicts = initial_conflicts
+        else:
+            conflicts = initial_conflicts
+
     if conflicts:
         return entry, conflicts
 
     before = _describe(entry)
     entry.time_slot = new_slot
-    entry.room = new_room
+    entry.room = target_room
     entry.save(update_fields=["time_slot", "room"])
     after = _describe(entry)
 

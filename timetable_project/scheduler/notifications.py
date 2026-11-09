@@ -296,3 +296,144 @@ def unread_count(user):
     if not user or not user.is_authenticated:
         return 0
     return Notification.objects.filter(recipient=user, is_read=False).count()
+
+def notify_respective_parties_of_slot_change(assignment, old_slot_code, new_slot, room, actor=None, action_type="moved"):
+    """
+    Instantly create in-app portal Notifications for both the respective teacher
+    and enrolled students of the division when a period is rescheduled or swapped.
+    """
+    from .models import DAY_CHOICES, Student
+    from .edits import _format_time
+
+    notifications = []
+    teacher = assignment.teacher
+    subj = assignment.subject
+    div = assignment.division
+    time_str = f"{_format_time(new_slot.start_time)}-{_format_time(new_slot.end_time)}"
+    day_name = dict(DAY_CHOICES).get(new_slot.day, new_slot.day)
+    action_verb = "rescheduled" if action_type == "moved" else "swapped"
+    actor_info = f" by coordinator ({actor.username})" if (actor and actor.is_authenticated) else ""
+    url = reverse("scheduler:my_timetable") + f"?semester_id={assignment.semester_id}"
+
+    # 1. Notify respective teacher on their portal
+    if teacher and teacher.user and teacher.user.is_active:
+        teacher_title = f"Timetable Update: {subj.name} {action_verb} to {new_slot.slot_code}"
+        teacher_body = (
+            f"Your teaching session for '{subj.name}' ({div.name}, Year {div.year}) "
+            f"has been {action_verb} from {old_slot_code} to {day_name} Period {new_slot.period_number} "
+            f"({time_str}) in {room.name}{actor_info}."
+        )
+        notifications.append(Notification.objects.create(
+            recipient=teacher.user,
+            kind="TIMETABLE_CHANGED",
+            severity="warning",
+            title=teacher_title,
+            body=teacher_body,
+            url=url,
+            semester=assignment.semester,
+        ))
+
+    # 2. Notify respective students of this division on their portal
+    student_users = [
+        s.user for s in Student.objects.filter(
+            division=div,
+            is_active=True,
+            user__isnull=False,
+            user__is_active=True
+        ).select_related("user")
+    ]
+
+    student_title = f"Class Schedule Update: {subj.name} {action_verb}"
+    student_body = (
+        f"Your {subj.name} class with Prof. {teacher.name if teacher else 'Faculty'} "
+        f"has been {action_verb} to {day_name} Period {new_slot.period_number} "
+        f"({time_str}) in {room.name}{actor_info}. Please check your updated personal timetable."
+    )
+    for student_user in student_users:
+        notifications.append(Notification.objects.create(
+            recipient=student_user,
+            kind="TIMETABLE_CHANGED",
+            severity="warning",
+            title=student_title,
+            body=student_body,
+            url=url,
+            semester=assignment.semester,
+        ))
+
+    return notifications
+
+
+def notify_teacher_of_slot_change(teacher, assignment, old_slot_code, new_slot, room, actor=None, action_type="moved"):
+    """
+    Instantly create in-app portal Notification for the respective teacher and division students
+    when a period is rescheduled or swapped via drag-and-drop.
+    """
+    res = notify_respective_parties_of_slot_change(
+        assignment=assignment,
+        old_slot_code=old_slot_code,
+        new_slot=new_slot,
+        room=room,
+        actor=actor,
+        action_type=action_type
+    )
+    return res[0] if res else None
+
+
+def notify_respective_parties_of_slot_deletion(assignment, slot, room, actor=None):
+    """
+    Notify teacher and division students on their portal when a scheduled period is removed.
+    """
+    from .models import DAY_CHOICES, Student
+    from .edits import _format_time
+
+    notifications = []
+    teacher = assignment.teacher
+    subj = assignment.subject
+    div = assignment.division
+    time_str = f"{_format_time(slot.start_time)}-{_format_time(slot.end_time)}"
+    day_name = dict(DAY_CHOICES).get(slot.day, slot.day)
+    actor_info = f" by coordinator ({actor.username})" if (actor and actor.is_authenticated) else ""
+    url = reverse("scheduler:my_timetable") + f"?semester_id={assignment.semester_id}"
+
+    # 1. Notify respective teacher
+    if teacher and teacher.user and teacher.user.is_active:
+        notifications.append(Notification.objects.create(
+            recipient=teacher.user,
+            kind="TIMETABLE_CHANGED",
+            severity="critical",
+            title=f"Class Cancelled: {subj.name} ({slot.slot_code})",
+            body=(
+                f"Your teaching session for '{subj.name}' ({div.name}) scheduled at "
+                f"{day_name} Period {slot.period_number} ({time_str}) in {room.name} "
+                f"has been cancelled/removed{actor_info}."
+            ),
+            url=url,
+            semester=assignment.semester,
+        ))
+
+    # 2. Notify respective students of this division
+    student_users = [
+        s.user for s in Student.objects.filter(
+            division=div,
+            is_active=True,
+            user__isnull=False,
+            user__is_active=True
+        ).select_related("user")
+    ]
+
+    for student_user in student_users:
+        notifications.append(Notification.objects.create(
+            recipient=student_user,
+            kind="TIMETABLE_CHANGED",
+            severity="critical",
+            title=f"Class Cancelled: {subj.name} ({slot.slot_code})",
+            body=(
+                f"The scheduled {subj.name} class with Prof. {teacher.name if teacher else 'Faculty'} "
+                f"at {day_name} Period {slot.period_number} in {room.name} has been removed{actor_info}."
+            ),
+            url=url,
+            semester=assignment.semester,
+        ))
+
+    return notifications
+

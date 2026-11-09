@@ -3,76 +3,80 @@
 {% block title %}Upload College Data JSON | Automatic Timetable Generator{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-8">
+<div class="max-w-4xl mx-auto space-y-6">
 
   <!-- Header -->
-  <div>
-    <h1 class="text-2xl font-extrabold text-slate-900 flex items-center gap-2.5">
-      <i class="fa-solid fa-cloud-arrow-up text-indigo-600"></i> Upload College Schedule Data
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <div class="flex items-center gap-2 mb-1.5">
+      <span class="status-pill-indigo !text-[10px]">
+        <span class="status-dot-cyan"></span> Structured Data Pipeline
+      </span>
+    </div>
+    <h1 class="text-xl sm:text-2xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+      <i class="fa-solid fa-cloud-arrow-up text-cyan-400"></i> Upload College Schedule Dataset
     </h1>
-    <p class="mt-1 text-sm text-slate-500">
-      Import a single JSON file containing semester parameters, working hours, division strengths, rooms, subjects, and faculty allocations.
+    <p class="mt-1 text-xs sm:text-sm text-slate-400">
+      Import a standardized JSON file specifying semester details, working hours, division strengths, venues, subjects, and faculty allocations.
     </p>
   </div>
 
   <!-- Upload Card -->
-  <div class="card p-6 sm:p-8">
+  <div class="card p-6 sm:p-8 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     <form method="POST" enctype="multipart/form-data" class="space-y-6">
       {% csrf_token %}
 
       <div>
-        <label class="block text-sm font-semibold text-slate-800 mb-2">
+        <label class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-2.5">
           Select JSON File
         </label>
-        <div class="border-2 border-dashed border-slate-300 rounded-2xl p-8 text-center hover:border-indigo-400 transition bg-slate-50/50">
-          <i class="fa-solid fa-file-code text-indigo-500 text-4xl mb-3"></i>
-          <p class="text-sm font-medium text-slate-700">Choose a valid college data JSON file</p>
-          <p class="text-xs text-slate-400 mt-1">Must strictly follow the required schema</p>
-          <input type="file" name="json_file" accept=".json" required class="mt-4 block mx-auto text-xs text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer">
+        <div class="border-2 border-dashed border-slate-700 rounded-xl p-8 text-center hover:border-cyan-400 transition bg-[#0F172A]/60">
+          <i class="fa-solid fa-file-code text-cyan-400 text-4xl mb-3"></i>
+          <p class="text-sm font-semibold text-[#F8FAFC]">Choose a valid college data JSON file</p>
+          <p class="text-xs text-slate-400 mt-1">Must conform strictly to the college schema</p>
+          <input type="file" name="json_file" accept=".json" required class="mt-4 block mx-auto text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer">
         </div>
       </div>
 
-      <div class="flex items-center justify-between pt-4 border-t border-slate-100">
-        <a href="{% url 'scheduler:home' %}" class="btn-ghost">
+      <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+        <a href="{% url 'scheduler:home' %}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">
           <i class="fa-solid fa-arrow-left"></i> Back to Dashboard
         </a>
-        <button type="submit" class="btn-primary">
-          <i class="fa-solid fa-upload"></i> Validate & Import Data
+        <button type="submit" class="btn-primary !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-indigo-sm font-bold">
+          <i class="fa-solid fa-upload"></i> Validate &amp; Ingest Dataset
         </button>
       </div>
     </form>
   </div>
 
-  <div class="card p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+  <div class="card p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
     <div>
-      <p class="text-sm font-bold text-slate-900 flex items-center gap-2">
-        <i class="fa-solid fa-file-pdf text-rose-500"></i> Have the college's PDF instead?
+      <p class="text-sm font-bold text-[#F8FAFC] flex items-center gap-2">
+        <i class="fa-solid fa-file-pdf text-rose-400"></i> College Master PDF Document Available?
       </p>
-      <p class="text-[11px] text-slate-500 mt-1">
-        The PDF importer reads calendars, rooms and the faculty allocation grid directly,
-        with a mapping review step before anything is saved.
+      <p class="text-xs text-slate-400 mt-1">
+        The PDF parser extracts academic calendars, rooms, and allocations with a pre-import verification review.
       </p>
     </div>
     <div class="flex gap-2">
-      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-secondary !text-xs">
-        <i class="fa-solid fa-magnifying-glass-chart"></i> Import from PDF
+      <a href="{% url 'scheduler:upload_pdf' %}" class="btn-cyan !text-xs !py-2 !px-3.5 !rounded-xl">
+        <i class="fa-solid fa-magnifying-glass-chart"></i> Ingest from PDF
       </a>
-      <a href="{% url 'scheduler:capacity_report' %}" class="btn-ghost !text-xs">
-        <i class="fa-solid fa-chart-column text-indigo-500"></i> Capacity Report
+      <a href="{% url 'scheduler:capacity_report' %}" class="btn-ghost !text-xs !py-2 !px-3.5 !rounded-xl">
+        <i class="fa-solid fa-chart-column text-cyan-400"></i> Capacity Report
       </a>
     </div>
   </div>
 
   <!-- Schema Specification & Sample Snippet -->
-  <div class="card p-6 space-y-4">
-    <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
-      <i class="fa-solid fa-code text-indigo-600"></i> Expected JSON Schema Format
+  <div class="card p-6 space-y-4 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+    <h2 class="text-sm font-bold text-[#F8FAFC] flex items-center gap-2">
+      <i class="fa-solid fa-code text-cyan-400"></i> Expected JSON Structure Specification
     </h2>
-    <p class="text-xs text-slate-600">
-      The file must specify semester details, daily working hours with excluded lunch window, years/divisions, rooms totals, and faculty allocations:
+    <p class="text-xs text-slate-400">
+      The file must provide college details, operational hours with excluded lunch break, divisions, rooms, and faculty teaching assignments:
     </p>
 
-    <pre class="bg-slate-900 text-indigo-200 p-4 rounded-xl text-xs overflow-x-auto font-mono leading-relaxed"><code>{
+    <pre class="bg-[#0B1120] text-cyan-300 p-4 rounded-xl text-xs overflow-x-auto font-mono leading-relaxed border border-slate-800"><code>{
   "college": {
     "name": "Engineering College",
     "semester_name": "Fall Semester 2026",
@@ -84,38 +88,11 @@
     "period_duration_minutes": 60,
     "lunch_break": { "start_time": "13:00", "end_time": "14:00" }
   },
-   "years": [
-     { "year": 1, "number_of_divisions": 3, "strength_per_division": 60 },
-     {
-       "year": 2,
-       "divisions": [
-         { "division_label": "A", "division_prefix": "SY", "strength": 60 },
-         { "division_label": "B", "division_prefix": "SY", "strength": 60 },
-         { "division_label": "A", "division_prefix": "SEDA", "strength": 55 }
-       ]
-     }
-   ],
+  "years": [
+    { "year": 1, "number_of_divisions": 3, "strength_per_division": 60 }
+  ],
   "subjects": [
     { "id": "SUB1", "name": "Physics", "is_lab": false }
-  ],
-  "rooms": {
-    "number_of_regular_rooms": 20,
-    "regular_room_capacity": 60,
-    "number_of_lab_rooms": 5,
-    "lab_room_capacity": 40
-  },
-  "teachers": [
-    {
-      "id": "T1",
-      "name": "Mr. Sharma",
-      "max_hours_per_week": 24,
-      "unavailable_slots": ["FRI-P4"],
-       "allocations": [
-         { "year": 1, "division": 1, "subject_id": "SUB1", "total_hours_for_semester": 64 },
-         { "year": 2, "division_label": "A", "subject_id": "CS1", "total_hours_for_semester": 45 },
-         { "year": 2, "division_label": "A", "division_prefix": "SEDA", "subject_id": "CS1", "total_hours_for_semester": 45 }
-       ]
-    }
   ]
 }</code></pre>
   </div>

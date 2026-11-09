@@ -5,47 +5,52 @@
 {% block content %}
 <div class="space-y-6">
 
-  <div class="card p-4 sm:p-6 flex flex-wrap items-center justify-between gap-4">
+  <div class="card p-5 sm:p-6 flex flex-wrap items-center justify-between gap-4 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
     <div>
-      <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900 flex items-center gap-2">
-        <i class="fa-solid fa-chart-column text-indigo-600"></i> Capacity Report
+      <div class="flex items-center gap-2 mb-1.5">
+        <span class="status-pill-indigo !text-[10px]">
+          <span class="status-dot-cyan"></span> Feasibility Verification
+        </span>
+      </div>
+      <h1 class="text-xl sm:text-2xl font-extrabold text-[#F8FAFC] flex items-center gap-2.5">
+        <i class="fa-solid fa-chart-column text-cyan-400"></i> Infrastructure Capacity Report
       </h1>
-      <p class="text-xs sm:text-sm text-slate-500 mt-1">
-        Whether the college is physically schedulable &mdash; checked before the solver runs.
+      <p class="text-xs sm:text-sm text-slate-400 mt-1">
+        Pre-flight physical feasibility audit &mdash; validates room capacity, lab availability, and teacher bandwidth before solving.
       </p>
     </div>
     <form method="GET" class="flex items-center gap-2">
       <select name="semester_id" onchange="this.form.submit()"
-              class="rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-indigo-500 outline-none">
+              class="rounded-xl border border-slate-700 px-3.5 py-2 text-xs bg-[#0F172A] text-[#F8FAFC] focus:ring-2 focus:ring-indigo-500 outline-none">
         {% for s in semesters %}
         <option value="{{ s.id }}" {% if selected_semester and s.id == selected_semester.id %}selected{% endif %}>{{ s.name }}</option>
         {% endfor %}
       </select>
-      <noscript><button class="btn-secondary !text-xs">Go</button></noscript>
+      <noscript><button class="btn-primary !text-xs !py-2 !rounded-xl">Go</button></noscript>
     </form>
   </div>
 
   {% if not plan %}
-    <div class="card p-8 text-center">
-      <i class="fa-solid fa-inbox text-3xl text-slate-300"></i>
-      <p class="text-sm text-slate-500 mt-3">No semester data yet. Import college data first.</p>
-      <a href="{% url 'scheduler:upload_json' %}" class="btn-primary mt-4">
+    <div class="card p-12 text-center bg-[#1E293B]/80 border border-slate-800 rounded-xl shadow-xl">
+      <i class="fa-solid fa-inbox text-3xl text-slate-600 mb-3 block"></i>
+      <p class="text-sm text-slate-400">No semester data yet. Import college data first.</p>
+      <a href="{% url 'scheduler:upload_json' %}" class="btn-primary mt-4 !rounded-xl">
         <i class="fa-solid fa-upload"></i> Import College Data
       </a>
     </div>
   {% else %}
 
-  <div class="card p-4 sm:p-5">
-    <div class="flex items-center gap-3">
-      <span class="w-10 h-10 rounded-xl grid place-items-center text-white
-        {% if plan.verdict == 'schedulable' %}bg-emerald-500{% else %}bg-rose-500{% endif %}">
+  <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-2xl">
+    <div class="flex items-center gap-4">
+      <span class="w-12 h-12 rounded-xl grid place-items-center text-xl border shadow-glow-cyan-sm
+        {% if plan.verdict == 'schedulable' %}bg-cyan-950/60 text-cyan-400 border-cyan-800{% else %}bg-rose-950/60 text-rose-400 border-rose-800{% endif %}">
         <i class="fa-solid {% if plan.verdict == 'schedulable' %}fa-circle-check{% else %}fa-triangle-exclamation{% endif %}"></i>
       </span>
       <div>
-        <p class="text-sm font-extrabold text-slate-900">
-          {% if plan.verdict == 'schedulable' %}This college is schedulable{% else %}This college cannot be fully scheduled{% endif %}
+        <p class="text-base font-extrabold text-[#F8FAFC]">
+          {% if plan.verdict == 'schedulable' %}College Resources Are Proven Schedulable{% else %}Physical Resource Shortfall Detected &mdash; cannot be fully scheduled{% endif %}
         </p>
-        <p class="text-[11px] text-slate-500">
+        <p class="text-xs text-slate-400 mt-0.5">
           {{ plan.division_count }} divisions &bull; {{ plan.assignment_count }} course offerings &bull;
           {{ plan.total_requested_hours }} weekly periods requested across {{ plan.time_slot_count }} periods per day
         </p>
@@ -54,85 +59,89 @@
   </div>
 
   {% if plan.findings %}
-  <div class="space-y-2">
+  <div class="space-y-2.5">
     {% for finding in plan.findings %}
-    <div class="card p-3.5 flex gap-3 border-l-4
-      {% if finding.severity == 'blocking' %}border-rose-500
-      {% elif finding.severity == 'warning' %}border-amber-500
-      {% else %}border-sky-500{% endif %}">
-      <i class="fa-solid {% if finding.severity == 'blocking' %}fa-circle-xmark text-rose-500
-        {% elif finding.severity == 'warning' %}fa-triangle-exclamation text-amber-500
-        {% else %}fa-circle-info text-sky-500{% endif %} mt-0.5"></i>
-      <p class="text-xs text-slate-600 leading-relaxed">{{ finding.message }}</p>
+    <div class="card p-4 flex gap-3.5 rounded-xl border border-slate-800 bg-[#1E293B]/90 backdrop-blur-xl shadow-md
+      {% if finding.severity == 'blocking' %}border-l-4 border-l-rose-500
+      {% elif finding.severity == 'warning' %}border-l-4 border-l-amber-500
+      {% else %}border-l-4 border-l-cyan-400{% endif %}">
+      <i class="fa-solid {% if finding.severity == 'blocking' %}fa-circle-xmark text-rose-400
+        {% elif finding.severity == 'warning' %}fa-triangle-exclamation text-amber-400
+        {% else %}fa-circle-info text-cyan-400{% endif %} mt-0.5 text-sm shrink-0"></i>
+      <p class="text-xs text-slate-300 leading-relaxed font-medium">{{ finding.message }}</p>
     </div>
     {% endfor %}
   </div>
   {% endif %}
 
-  <div class="grid sm:grid-cols-2 gap-4">
-    <div class="card p-4 sm:p-5">
-      <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">Room Supply vs Demand</h2>
+  <div class="grid sm:grid-cols-2 gap-5">
+    <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+      <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wide mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-door-open text-cyan-400"></i> Venue Supply vs Academic Demand
+      </h2>
       <table class="w-full text-left border-collapse text-xs">
         <thead>
-          <tr class="bg-slate-100">
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600">Type</th>
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600 text-right">Rooms</th>
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600 text-right">Hours needed</th>
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600 text-right">Capacity</th>
+          <tr class="bg-[#0B1120] text-slate-400 uppercase tracking-wider font-extrabold">
+            <th class="p-2.5 border border-slate-800 font-semibold">Type</th>
+            <th class="p-2.5 border border-slate-800 font-semibold text-right">Venues</th>
+            <th class="p-2.5 border border-slate-800 font-semibold text-right">Demand</th>
+            <th class="p-2.5 border border-slate-800 font-semibold text-right">Capacity</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y divide-slate-800 bg-[#0F172A]/40 text-slate-300">
           <tr>
-            <td class="p-2 border border-slate-200 font-medium text-slate-700">Classroom</td>
-            <td class="p-2 border border-slate-200 text-right">{{ plan.supply.theory }}</td>
-            <td class="p-2 border border-slate-200 text-right">{{ plan.demand.theory }}</td>
-            <td class="p-2 border border-slate-200 text-right">{{ plan.weekly_supply.theory }}</td>
+            <td class="p-2.5 border border-slate-800 font-bold text-[#F8FAFC]">Theory Classroom</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono">{{ plan.supply.theory }}</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono text-cyan-400">{{ plan.demand.theory }}h</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono">{{ plan.weekly_supply.theory }}h</td>
           </tr>
           <tr>
-            <td class="p-2 border border-slate-200 font-medium text-slate-700">Laboratory</td>
-            <td class="p-2 border border-slate-200 text-right">{{ plan.supply.lab }}</td>
-            <td class="p-2 border border-slate-200 text-right">{{ plan.demand.lab }}</td>
-            <td class="p-2 border border-slate-200 text-right">{{ plan.weekly_supply.lab }}</td>
+            <td class="p-2.5 border border-slate-800 font-bold text-[#F8FAFC]">Laboratory</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono">{{ plan.supply.lab }}</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono text-cyan-400">{{ plan.demand.lab }}h</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono">{{ plan.weekly_supply.lab }}h</td>
           </tr>
         </tbody>
       </table>
-      <p class="text-[11px] text-slate-400 mt-3">
-        Room utilisation: <strong class="text-slate-600">{{ plan.utilisation_percent }}%</strong>
+      <p class="text-[11px] text-slate-400 mt-3 font-mono">
+        Room utilisation: <strong class="text-cyan-400 font-bold">{{ plan.utilisation_percent }}%</strong>
         ({{ plan.total_requested_hours }} of {{ plan.weekly_room_slots }} room-periods).
       </p>
     </div>
 
-    <div class="card p-4 sm:p-5">
-      <h2 class="text-xs font-bold text-slate-700 uppercase tracking-wide mb-3">Division Strength Coverage</h2>
+    <div class="card p-5 sm:p-6 bg-[#1E293B]/90 backdrop-blur-xl border border-slate-800 rounded-xl shadow-xl">
+      <h2 class="text-xs font-bold text-slate-300 uppercase tracking-wide mb-3 flex items-center gap-2">
+        <i class="fa-solid fa-users text-cyan-400"></i> Division Strength Coverage
+      </h2>
       <table class="w-full text-left border-collapse text-xs">
         <thead>
-          <tr class="bg-slate-100">
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600">Strength</th>
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600 text-right">Classrooms that fit</th>
-            <th class="p-2 border border-slate-200 font-semibold text-slate-600 text-right">Labs that fit</th>
+          <tr class="bg-[#0B1120] text-slate-400 uppercase tracking-wider font-extrabold">
+            <th class="p-2.5 border border-slate-800 font-semibold">Division Strength</th>
+            <th class="p-2.5 border border-slate-800 font-semibold text-right">Classrooms That Fit</th>
+            <th class="p-2.5 border border-slate-800 font-semibold text-right">Labs That Fit</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody class="divide-y divide-slate-800 bg-[#0F172A]/40 text-slate-300">
           {% for row in plan.strength_rows %}
           <tr>
-            <td class="p-2 border border-slate-200 font-medium text-slate-700">{{ row.strength }}</td>
-            <td class="p-2 border border-slate-200 text-right {% if row.theory_rooms == 0 %}text-rose-600 font-bold{% endif %}">{{ row.theory_rooms }}</td>
-            <td class="p-2 border border-slate-200 text-right {% if row.lab_rooms == 0 %}text-rose-600 font-bold{% endif %}">{{ row.lab_rooms }}</td>
+            <td class="p-2.5 border border-slate-800 font-bold text-[#F8FAFC]">{{ row.strength }} students</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono {% if row.theory_rooms == 0 %}text-rose-400 font-bold{% else %}text-slate-300{% endif %}">{{ row.theory_rooms }}</td>
+            <td class="p-2.5 border border-slate-800 text-right font-mono {% if row.lab_rooms == 0 %}text-rose-400 font-bold{% else %}text-slate-300{% endif %}">{{ row.lab_rooms }}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="3" class="p-3 text-center text-slate-400">No assignments yet.</td></tr>
+          <tr><td colspan="3" class="p-3 text-center text-slate-500">No assignments configured yet.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 
-  <div class="flex flex-wrap gap-2">
-    <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ plan.semester.id }}" class="btn-secondary">
-      <i class="fa-solid fa-wand-magic-sparkles"></i> Try Generating Anyway
+  <div class="flex flex-wrap gap-2.5 pt-2">
+    <a href="{% url 'scheduler:generate_timetable' %}?semester_id={{ plan.semester.id }}" class="btn-primary !text-xs !py-2.5 !px-5 !rounded-xl shadow-glow-indigo-sm font-bold">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Launch Optimization Solver
     </a>
-    <a href="{% url 'scheduler:export_issues_pdf' %}?semester_id={{ plan.semester.id }}" class="btn-ghost">
-      <i class="fa-solid fa-file-pdf text-rose-500"></i> Export as PDF
+    <a href="{% url 'scheduler:export_issues_pdf' %}?semester_id={{ plan.semester.id }}" class="btn-ghost !text-xs !py-2.5 !px-4 !rounded-xl">
+      <i class="fa-solid fa-file-pdf text-rose-400"></i> Export Capacity PDF
     </a>
   </div>
 

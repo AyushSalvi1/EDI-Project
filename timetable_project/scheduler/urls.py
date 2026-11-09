@@ -53,7 +53,7 @@ urlpatterns = [
     path('manage/entries/<int:pk>/move/', views.move_entry_view, name='move_entry'),
     path('manage/entries/<int:pk>/delete/', views.delete_entry_view, name='delete_entry'),
 
-    # Advanced Features: iCalendar sync & Omni-Search
+    # Advanced Features: iCalendar sync, Omni-Search & Drag-and-Drop APIs
     path('export/ical/', views.export_ical_view, name='export_ical'),
     path('api/search/', views.omni_search_api, name='omni_search_api'),
     path('api/live-move/', views.live_move_api, name='live_move_api'),
